@@ -26,8 +26,10 @@ python bot/main.py
 python -m venv venv
 pip install python-telegram-bot
 pip install aiohttp
+pip install aiogram python-dotenv openai
 .\venv\Scripts\Activate.ps1
 venv\Scripts\activate
+
 
 
 
