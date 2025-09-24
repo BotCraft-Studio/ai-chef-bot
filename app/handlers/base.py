@@ -1,6 +1,6 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-from app.keyboards import main_menu
+from app.keyboards import main_menu, goal_submenu, premium_menu, profile_menu
 from app import storage
 from app.providers.yandex_vision import YandexRecipes
 recipes = YandexRecipes()
@@ -8,9 +8,8 @@ recipes = YandexRecipes()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     storage.upsert_user(update.effective_user.id)
     await update.message.reply_text(
-        "Привет! Я ваш личный повар 👨‍🍳.\n\n"
-        "Пришлите фото продуктов — распознаю и предложу рецепт с КБЖУ.\n"
-        "Команды: /help, /daily 09:00 on|off, /list, /del",
+        "Привет! Я ваш личный повар 👨‍🍳\n\n"
+        "Выберите опцию:",
         reply_markup=main_menu()
     )
 
@@ -53,50 +52,153 @@ async def daily_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Ежедневная рассылка включена ✅" if enabled else "Рассылка выключена 🛑")
 
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = (update.message.text or "").strip()
-    items = [x.strip() for x in text.split(",") if x.strip()]
-    if not items:
-        return await update.message.reply_text("Напиши продукты через запятую, например: курица, лук, морковь")
-
-    # Показываем статус "печатает"
-    try:
-        await update.message.chat.send_action(action="typing")
-    except Exception:
-        pass
-
-    # Вызываем Яндекс-провайдер (используем глобальный объект recipes)
-    try:
-        reply = await recipes.recipe_with_macros(items)
-    except Exception as e:
-        # Если ошибка — вернём понятный текст и лог
-        await update.message.reply_text("Ошибка при обращении к AI: " + str(e))
-        return
-
-    # Сохраняем ингредиенты в хранилище
-    try:
-        storage.add_ingredients(update.effective_user.id, items)
-    except Exception:
-        # если storage ломается — не фейлим весь процесс
-        pass
-
-    # Telegram ограничение на сообщение ~4096 символов — разбиваем на части
-    max_len = 4000
-    for i in range(0, len(reply), max_len):
-        await update.message.reply_text(reply[i:i + max_len])
-
+    text = update.message.text
+    
+    # Если это ответ на запрос ручного ввода
+    if not text.startswith('/'):  # не команда
+        items = [x.strip() for x in text.split(",") if x.strip()]
+        if items:
+            from app.providers.yandex_vision import YandexRecipes
+            ai = YandexRecipes()
+            reply = await ai.recipe_with_macros(items)
+            storage.add_ingredients(update.effective_user.id, items)
+            await update.message.reply_text(reply, reply_markup=main_menu())
+            return
+    
+    await update.message.reply_text("Напишите ингредиенты через запятую или используйте меню")
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     data = q.data
-    if data == "how_photo":
-        await q.message.reply_text("Нажмите скрепку → Фото/Видео → выберите фото (не как файл). Отправьте.")
-    elif data == "daily_on":
-        storage.upsert_user(q.from_user.id, enabled=1)
-        await q.message.reply_text("Ежедневная рассылка включена ✅ (время см. /daily)")
-    elif data == "daily_off":
-        storage.upsert_user(q.from_user.id, enabled=0)
-        await q.message.reply_text("Рассылка выключена 🛑")
+    
+    if data == "surprise_recipe":
+        # Рецепт дня из сезонных рецептов
+        import datetime
+        from app import seasonal
+        from app.providers.yandex_vision import YandexRecipes
+        
+        month = datetime.datetime.now().month
+        seasonal_recipes = seasonal.SEASONAL.get(month, [])
+        recipe_name = seasonal_recipes[0] if seasonal_recipes else "Сезонный рецепт"
+        
+        ai = YandexRecipes()
+        reply = await ai.recipe_with_macros([recipe_name])
+        await q.message.edit_text(f"✨ Рецепт дня!\n\n{reply}", reply_markup=main_menu())
+        
+    elif data == "goal_recipe":
+        # Подменю выбора способа ввода
+        await q.message.edit_text(
+            "🎯 Выберите способ ввода продуктов:",
+            reply_markup=goal_submenu()
+        )
+
+    elif data == "buy_pro":
+        await q.message.edit_text(
+            "💳 <b>Оформление PRO подписки</b>\n\n"
+            "Premium PRO на 12 месяцев:\n"
+            "• Цена: 999 руб.\n"
+            "• Доступ ко всем функциям\n"
+            "• Техническая поддержка 24/7\n\n"
+            "Для оплаты свяжитесь с @администратор",
+            reply_markup=premium_menu(),
+            parse_mode='HTML'
+        )
+
+    elif data == "change_goal":
+        await q.message.edit_text(
+            "🎯 <b>Изменить цель питания</b>\n\n"
+            "Выберите вашу основную цель:\n"
+            "• Похудение 🏃‍♂️\n"
+            "• Поддержание веса ⚖️\n"
+            "• Набор массы 💪\n"
+            "• Здоровое питание 🥗\n\n"
+            "Функция в разработке...",
+            reply_markup=profile_menu(),
+            parse_mode='HTML'
+        )
+        
+    elif data == "my_products":
+        ingredients = storage.list_ingredients(q.from_user.id)
+        if not ingredients:
+            text = "🍳 <b>Ваши продукты</b>\n\nСписок пуст. Добавьте продукты через меню."
+        else:
+            text = "🍳 <b>Ваши продукты</b>\n\n" + "\n".join([f"• {name}" for _, name, _ in ingredients[:10]])
+            if len(ingredients) > 10:
+                text += f"\n\n... и еще {len(ingredients) - 10} продуктов"
+        
+        await q.message.edit_text(text, reply_markup=profile_menu(), parse_mode='HTML')
+        
+    elif data == "clear_products":
+        storage.clear_ingredients(q.from_user.id)
+        await q.message.edit_text(
+            "🗑 <b>Список продуктов очищен</b>\n\n"
+            "Все ваши продукты удалены. Можете начать заново!",
+            reply_markup=profile_menu(),
+            parse_mode='HTML'
+        )
+        
+    elif data == "back_to_main":
+        await q.message.edit_text(
+            "Выберите опцию:",
+            reply_markup=main_menu()
+        )
+        
+    elif data == "upload_photo":
+        await q.message.edit_text(
+            "📷 Отправьте фото продуктов\n\n"
+            "Совет: сфотографируйте продукты на светлом фоне для лучшего распознавания"
+        )
+        
+    elif data == "manual_input":
+        await q.message.edit_text(
+            "⌨️ Введите продукты через запятую:\n\n"
+            "Пример: курица, рис, лук, морковь\n\n"
+            "Я предложу рецепт с расчетом КБЖУ!"
+        )
+        
+    elif data == "back_to_main":
+        await q.message.edit_text(
+            "Выберите опцию:",
+            reply_markup=main_menu()
+        )
+        
     elif data == "list":
         fake_update = Update(update.update_id, message=q.message)
         await list_cmd(fake_update, context)
+
+
+async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+ await update.message.reply_text(
+    "🔄 Фото получено! Функция распознавания продуктов временно недоступна.\n\n"
+    "Пожалуйста, введите продукты текстом через запятую.",
+    reply_markup=main_menu()  # ← ИСПРАВЛЕНО: = вместо -
+)
+ 
+async def premium_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+     await update.message.reply_text(
+        "🌟 <b>Premium рецепты PRO</b>\n\n"
+        "Получите доступ к эксклюзивным функциям:\n"
+        "• Более 1000 премиум рецептов\n"
+        "• Персональный план питания\n"
+        "• Расширенная база продуктов\n"
+        "• Приоритетная поддержка\n\n"
+        "Выберите действие:",
+        reply_markup=premium_menu(),
+        parse_mode='HTML'
+    )
+     
+async def profile_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    ingredients = storage.list_ingredients(user_id)
+    ingredients_count = len(ingredients)
+    
+    await update.message.reply_text(
+        f"👤 <b>Ваш профиль</b>\n\n"
+        f"📊 Статистика:\n"
+        f"• Сохранено продуктов: {ingredients_count}\n"
+        f"• Последние добавления: {', '.join([name for _, name, _ in ingredients[:3]]) if ingredients else 'нет'}\n\n"
+        f"Выберите действие:",
+        reply_markup=profile_menu(),
+        parse_mode='HTML'
+    )
