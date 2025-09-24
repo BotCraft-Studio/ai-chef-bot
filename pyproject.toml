@@ -1,0 +1,13 @@
+[project]
+name = "ai-chef-bot"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+dependencies= [
+    "python-telegram-bot==22.4",
+    "python-dotenv==1.1.1",
+    "openai>=1.30.0",
+    "Pillow==11.3.0",
+    "fastapi==0.117.1",
+    "uvicorn==0.37.0"
+]
