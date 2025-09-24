@@ -1,6 +1,6 @@
 import base64
-from openai import AsyncOpenAI
-from app.config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_TIMEOUT
+from openai import OpenAI
+from app.config import YANDEX_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_TIMEOUT, DEEPSEEK_BASE_URL
 
 SYS_PARSE = (
     "Ты кулинарный ассистент. По изображению определи СПИСОК ПРОДУКТОВ. "
@@ -14,13 +14,13 @@ SYS_RECIPE = (
 
 class OpenAIVision:
     def __init__(self):
-        if not OPENAI_API_KEY:
+        if not YANDEX_API_KEY:
             raise RuntimeError("OPENAI_API_KEY is missing")
-        self.client = AsyncOpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_TIMEOUT)
+        self.client = OpenAI(api_key=YANDEX_API_KEY,base_url=DEEPSEEK_BASE_URL)
 
     async def _chat(self, messages):
         resp = await self.client.chat.completions.create(
-            model=OPENAI_MODEL,
+            model=DEEPSEEK_MODEL,
             messages=messages,
             temperature=0.6,
         )
