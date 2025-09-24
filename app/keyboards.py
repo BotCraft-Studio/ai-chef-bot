@@ -2,8 +2,27 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 def main_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📸 Как отправить фото", callback_data="how_photo")],
-        [InlineKeyboardButton("📬 Ежедневная подборка", callback_data="daily_on")],
-        [InlineKeyboardButton("🛑 Выключить рассылку", callback_data="daily_off")],
-        [InlineKeyboardButton("📋 Мои ингредиенты", callback_data="list")],
+        [InlineKeyboardButton("✨ Удиви меня! (Рецепт дня)", callback_data="surprise_recipe")],
+        [InlineKeyboardButton("🎯 Получить рецепт под мою цель", callback_data="goal_recipe")],
+    ])
+
+def goal_submenu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📷 Загрузить фото продуктов", callback_data="upload_photo")],
+        [InlineKeyboardButton("⌨️ Ввести продукты вручную", callback_data="manual_input")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")],
+    ])
+
+def premium_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("💳 Купить PRO", callback_data="buy_pro")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")],
+    ])
+
+def profile_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎯 Изменить цель", callback_data="change_goal")],
+        [InlineKeyboardButton("🍳 Мои продукты", callback_data="my_products")],
+        [InlineKeyboardButton("🗑 Очистить продукты", callback_data="clear_products")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")],
     ])
