@@ -3,13 +3,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# --- YANDEX settings (new)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 RUN_MODE = os.getenv("RUN_MODE", "polling")   # polling | webhook
 TZ = os.getenv("TZ", "Europe/Amsterdam")
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-OPENAI_TIMEOUT = int(os.getenv("OPENAI_TIMEOUT", "45"))
+USE_YANDEX = os.getenv("USE_YANDEX", "0").lower() in ("1", "true", "yes")
+YANDEX_API_KEY = os.getenv("YANDEX_API_KEY", "")
+YANDEX_FOLDER_ID = os.getenv("YANDEX_FOLDER_ID", "")
+YANDEX_TIMEOUT = int(os.getenv("YANDEX_TIMEOUT", "45"))
 
 WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "")
 WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "/telegram/webhook")

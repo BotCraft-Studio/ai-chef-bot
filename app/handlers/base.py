@@ -2,6 +2,8 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from app.keyboards import main_menu
 from app import storage
+from app.providers.yandex_vision import YandexRecipes
+recipes = YandexRecipes()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     storage.upsert_user(update.effective_user.id)
@@ -51,15 +53,37 @@ async def daily_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Ежедневная рассылка включена ✅" if enabled else "Рассылка выключена 🛑")
 
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
+    text = (update.message.text or "").strip()
     items = [x.strip() for x in text.split(",") if x.strip()]
     if not items:
-        return await update.message.reply_text("Напишите ингредиенты через запятую или пришлите фото")
-    from app.providers.openai_vision import OpenAIVision
-    ai = OpenAIVision()
-    reply = await ai.recipe_with_macros(items)
-    storage.add_ingredients(update.effective_user.id, items)
-    await update.message.reply_text(reply)
+        return await update.message.reply_text("Напиши продукты через запятую, например: курица, лук, морковь")
+
+    # Показываем статус "печатает"
+    try:
+        await update.message.chat.send_action(action="typing")
+    except Exception:
+        pass
+
+    # Вызываем Яндекс-провайдер (используем глобальный объект recipes)
+    try:
+        reply = await recipes.recipe_with_macros(items)
+    except Exception as e:
+        # Если ошибка — вернём понятный текст и лог
+        await update.message.reply_text("Ошибка при обращении к AI: " + str(e))
+        return
+
+    # Сохраняем ингредиенты в хранилище
+    try:
+        storage.add_ingredients(update.effective_user.id, items)
+    except Exception:
+        # если storage ломается — не фейлим весь процесс
+        pass
+
+    # Telegram ограничение на сообщение ~4096 символов — разбиваем на части
+    max_len = 4000
+    for i in range(0, len(reply), max_len):
+        await update.message.reply_text(reply[i:i + max_len])
+
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
