@@ -3,7 +3,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from app.config import BOT_TOKEN
 from app import storage
 from app.handlers import (
-    start, help_cmd, list_cmd, del_cmd, daily_cmd, on_text, on_photo, on_callback
+    start, help_cmd, list_cmd, del_cmd, daily_cmd, on_text, on_callback
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -16,7 +16,6 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("del", del_cmd))
     app.add_handler(CommandHandler("daily", daily_cmd))
     app.add_handler(CallbackQueryHandler(on_callback))
-    app.add_handler(MessageHandler(filters.PHOTO, on_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     return app
 

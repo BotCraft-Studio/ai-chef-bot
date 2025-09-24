@@ -83,3 +83,20 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     max_len = 4000
     for i in range(0, len(reply), max_len):
         await update.message.reply_text(reply[i:i + max_len])
+
+
+async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    data = q.data
+    if data == "how_photo":
+        await q.message.reply_text("Нажмите скрепку → Фото/Видео → выберите фото (не как файл). Отправьте.")
+    elif data == "daily_on":
+        storage.upsert_user(q.from_user.id, enabled=1)
+        await q.message.reply_text("Ежедневная рассылка включена ✅ (время см. /daily)")
+    elif data == "daily_off":
+        storage.upsert_user(q.from_user.id, enabled=0)
+        await q.message.reply_text("Рассылка выключена 🛑")
+    elif data == "list":
+        fake_update = Update(update.update_id, message=q.message)
+        await list_cmd(fake_update, context)
