@@ -26,3 +26,11 @@ def profile_menu():
         [InlineKeyboardButton("🗑 Очистить продукты", callback_data="clear_products")],
         [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")],
     ])
+
+
+def after_recipe_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔁 Сгенерировать другой", callback_data="regenerate")],
+        [InlineKeyboardButton("💾 Сохранить рецепт", callback_data="save_recipe")],
+        [InlineKeyboardButton("🔙 В меню", callback_data="back_to_main")]
+    ])
