@@ -1,6 +1,9 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-from app.keyboards import main_menu, goal_submenu, premium_menu, profile_menu, after_recipe_menu
+from telegram.constants import ParseMode  # NEW
+import re  # NEW
+import html  # NEW
+from app.keyboards import main_menu, goal_submenu, premium_menu, profile_menu, after_recipe_menu, goal_choice_menu
 from app import storage
 from app.providers.yandex_vision import YandexRecipes
 
@@ -10,6 +13,33 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+
+# NEW: аккуратно превращаем markdown-звёздочки в HTML для Телеграма
+def format_recipe_for_telegram(ai_text: str) -> str:
+    """
+    Делает текст из Яндекс GPT аккуратным для Телеграма:
+    - **Заголовок** -> <b>Заголовок</b>
+    - Строки вида "* Пункт" -> "• Пункт"
+    - Экранирует HTML-символы, чтобы текст не ломал разметку
+    """
+    # 1) экранируем любые <, >, & и т.п.
+    text = html.escape(ai_text)
+
+    # 2) **Жирный** -> <b>Жирный</b>
+    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+
+    # 3) В начале строк "* " -> "• "
+    text = re.sub(r'(?m)^[ \t]*\* +', '• ', text)
+
+    # 4) приводим множественные пустые строки к двум
+    text = re.sub(r'\n{3,}', '\n\n', text).strip()
+
+    return text
+
+
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """
@@ -45,7 +75,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Значения ориентировочные, для стандартных порций
 • Точность зависит от правильности ввода продуктов
 • Для точных расчетов укажите вес продуктов
-
+в
 🎯 Советы:
 • Используйте 📸 фото для быстрого ввода
 • Указывайте 🎯 цель для персонализированных рецептов
@@ -56,8 +86,11 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rows = storage.list_ingredients(update.effective_user.id)
     if not rows:
-        return await update.message.reply_text("Ингредиентов нет. Пришлите фото или текст.")
-    text = "Ваши ингредиенты:\n" + "\n".join(f"{i}. {n}" for i, n, _ in rows[:50])
+        return await update.message.reply_text(
+            "📦 Ингредиентов нет.\n\n"
+            "✨ Добавьте продукты через меню!"
+        )
+    text = "Ваши ингредиенты:\n" + "\n".join(f"{i}. {n}" for i, n, _ in rows[:20])
     await update.message.reply_text(text)
 
 async def del_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -82,8 +115,6 @@ async def daily_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         storage.upsert_user(update.effective_user.id, enabled=enabled)
     await update.message.reply_text("Ежедневная рассылка включена ✅" if enabled else "Рассылка выключена 🛑")
 
-
-
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip() if update.message and update.message.text else ""
     user_id = update.effective_user.id
@@ -96,34 +127,36 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if storage.get_flag(user_id, "await_manual"):
         items = [x.strip() for x in text.split(",") if x.strip()]
         if not items:
-            return await update.message.reply_text("Похоже, список пуст. Введите продукты через запятую, например: курица, рис, лук")
-        # выставляем флаг busy
-        storage.set_flag(user_id, "busy", True)
-        try:
-            storage.add_ingredients(user_id, items)
-            ai = YandexRecipes()
-            reply = await ai.recipe_with_macros(items)
-        except Exception as e:
-            storage.set_flag(user_id, "busy", False)
-            storage.set_flag(user_id, "await_manual", False)
-            return await update.message.reply_text(f"Ошибка при запросе рецепта: {e}")
-        # Сбросим флаги
-        storage.set_flag(user_id, "busy", False)
+            return await update.message.reply_text(
+                "Похоже, список пуст. Введите продукты через запятую, например: курица, рис, лук"
+            )
+
+        # Сохраняем товары пользователя
+        storage.add_ingredients(user_id, items)
+
+        # Выключаем режим ручного ввода — дальше ждём выбор цели
         storage.set_flag(user_id, "await_manual", False)
 
-        # Сохраняем последний сгенерированный рецепт в context.user_data
-        context.user_data["last_generated_recipe"] = {
-            "text": reply,
-            "ingredients": items,
-            "title": items[0] if items else "Рецепт"
-        }
+        # Список для показа
+        products_list = "\n".join(f"• {name}" for _, name, _ in storage.list_ingredients(user_id))
+        reply_text = (
+            "Вот твои продукты:\n"
+            f"{products_list}\n\n"
+            "Самое важное — под какую цель делаем рецепт?"
+        )
 
-        await update.message.reply_text(reply, reply_markup=after_recipe_menu())
-        return
+        return await update.message.reply_text(reply_text, reply_markup=goal_choice_menu())
 
     # Иначе — подсказка
-    await update.message.reply_text("Чтобы ввести продукты вручную, нажмите: ⌨️ Ввести продукты вручную в меню.", reply_markup=main_menu())
+    keyboard = [
+        [InlineKeyboardButton("⌨️ Ввести продукты вручную", callback_data="manual_input")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
+    await update.message.reply_text(
+        "Чтобы ввести продукты вручную, нажмите кнопку ниже:",
+        reply_markup=reply_markup
+    )
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -140,7 +173,73 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         recipe_name = seasonal_recipes[0] if seasonal_recipes else "Сезонный рецепт"
         ai = YandexRecipes()
         reply = await ai.recipe_with_macros([recipe_name])
-        await q.message.edit_text(f"✨ Рецепт дня!\n\n{reply}", reply_markup=main_menu())
+        pretty = format_recipe_for_telegram(reply)  # NEW
+        await q.message.edit_text(
+            f"✨ Рецепт дня!\n\n{pretty}",
+            reply_markup=main_menu(),
+            parse_mode=ParseMode.HTML,              # NEW
+            disable_web_page_preview=True           # NEW
+        )
+
+    elif data == "add_more":
+        # Включаем режим ручного ввода, чтобы принять доп. продукты
+        storage.set_flag(user_id, "await_manual", True)
+        await q.message.edit_text(
+            "Добавь продукты через запятую, я их ДОБАВЛЮ к текущему списку.\n\n"
+            "Например: сыр, помидоры, оливковое масло"
+        )
+
+    elif data.startswith("goal:"):
+        goal_map = {
+            "goal:lose":   "похудение",
+            "goal:pp":     "правильное питание (ПП)",
+            "goal:fast":   "быстрый рецепт",
+            "goal:normal": "обычный рецепт",
+            "goal:vegan":  "веганский рецепт",
+            "goal:keto":   "кето-рецепт",
+        }
+        goal_name = goal_map.get(data, "обычный рецепт")
+
+        # Берём актуальные продукты из хранилища
+        rows = storage.list_ingredients(user_id)
+        items = [name for _, name, _ in rows]
+
+        if not items:
+            return await q.message.edit_text(
+                "Не вижу продуктов. Введите продукты через запятую, например: курица, рис, лук",
+                reply_markup=main_menu()
+            )
+
+        # Генерируем рецепт
+        if storage.get_flag(user_id, "busy"):
+            return await q.message.reply_text("⏳ Я уже генерирую рецепт — подождите немного.")
+        storage.set_flag(user_id, "busy", True)
+
+        try:
+            ai = YandexRecipes()
+            # Простой способ «передать» цель модели — добавить строку-установку
+            prompt_items = [f"Цель: {goal_name}"] + items
+            reply = await ai.recipe_with_macros(prompt_items)
+            pretty = format_recipe_for_telegram(reply)
+
+            # сохраним последний рецепт
+            context.user_data["last_generated_recipe"] = {
+                "text": reply,
+                "ingredients": items,
+                "title": items[0] if items else "Рецепт"
+            }
+        except Exception as e:
+            storage.set_flag(user_id, "busy", False)
+            return await q.message.edit_text(f"Ошибка при запросе рецепта: {e}")
+
+        storage.set_flag(user_id, "busy", False)
+
+        await q.message.edit_text(
+            pretty,
+            reply_markup=after_recipe_menu(),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True
+        )    
 
     elif data == "goal_recipe":
         await q.message.edit_text("🎯 Выберите способ ввода продуктов:", reply_markup=goal_submenu())
@@ -167,12 +266,18 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             ai = YandexRecipes()
             reply = await ai.recipe_with_macros(last)
+            pretty = format_recipe_for_telegram(reply)
         except Exception as e:
             storage.set_flag(user_id, "busy", False)
             return await q.message.edit_text(f"Ошибка генерации: {e}", reply_markup=main_menu())
         storage.set_flag(user_id, "busy", False)
         context.user_data["last_generated_recipe"] = {"text": reply, "ingredients": last, "title": last[0] if last else "Рецепт"}
-        await q.message.edit_text(reply, reply_markup=after_recipe_menu())
+        await q.message.edit_text(
+            pretty,
+            reply_markup=after_recipe_menu(),
+            parse_mode=ParseMode.HTML,              # NEW
+            disable_web_page_preview=True           # NEW
+        )
 
     elif data == "save_recipe":
         last = context.user_data.get("last_generated_recipe")
