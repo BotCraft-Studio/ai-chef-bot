@@ -30,10 +30,6 @@ def up(db: Database):
                         "description": "Пол пользователя",
                         "maxLength": 1
                     },
-                    "is_premium": {
-                        "bsonType": "bool",
-                        "description": "Пользователь ТГ-премиум"
-                    },
                     "is_pro": {
                         "bsonType": "bool",
                         "description": "Пользователь платной подписки"

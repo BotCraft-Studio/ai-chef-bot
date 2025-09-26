@@ -1,53 +1,124 @@
-import sqlite3
-from pathlib import Path
+# app/storage.py
+import json
+import os
+import threading
+from typing import List, Tuple, Optional
 
-DB_PATH = Path(__file__).parent.parent / "data.sqlite"
+# data.json будет лежать рядом с папкой app
+DATA_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data.json"))
+_LOCK = threading.Lock()
 
-def _cx():
-    return sqlite3.connect(DB_PATH)
+_DEFAULT = {
+    "users": {},
+    "next_recipe_id": 1
+}
 
 def init_db():
-    with _cx() as cx:
-        cx.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-          user_id INTEGER PRIMARY KEY,
-          daily_time TEXT DEFAULT '09:00',
-          daily_enabled INTEGER DEFAULT 0
-        );
-        """)
-        cx.execute("""
-        CREATE TABLE IF NOT EXISTS ingredients (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id INTEGER NOT NULL,
-          name TEXT NOT NULL,
-          added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        """)
-        cx.commit()
+    """Создаёт файл data.json если не существует (вызывается в main.py)."""
+    if not os.path.exists(DATA_FILE):
+        os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(_DEFAULT, f, ensure_ascii=False, indent=2)
 
-def upsert_user(user_id: int, daily_time: str | None = None, enabled: int | None = None):
-    with _cx() as cx:
-        cx.execute("INSERT OR IGNORE INTO users(user_id) VALUES(?)", (user_id,))
-        if daily_time is not None:
-            cx.execute("UPDATE users SET daily_time=? WHERE user_id=?", (daily_time, user_id))
-        if enabled is not None:
-            cx.execute("UPDATE users SET daily_enabled=? WHERE user_id=?", (enabled, user_id))
-        cx.commit()
+def _read():
+    init_db()
+    with _LOCK:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except Exception:
+                # если файл повреждён — перезапишем дефолтом
+                return _DEFAULT.copy()
 
-def list_ingredients(user_id: int):
-    with _cx() as cx:
-        cur = cx.execute("SELECT id,name,added_at FROM ingredients WHERE user_id=? ORDER BY id DESC", (user_id,))
-        return cur.fetchall()
+def _write(data):
+    with _LOCK:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
-def add_ingredients(user_id: int, items: list[str]):
-    items = [i.strip() for i in items if i.strip()]
-    if not items:
-        return
-    with _cx() as cx:
-        cx.executemany("INSERT INTO ingredients(user_id,name) VALUES(?,?)", [(user_id, i) for i in items])
-        cx.commit()
+def upsert_user(user_id: int, daily_time: Optional[str]=None, enabled: Optional[int]=None):
+    data = _read()
+    uid = str(user_id)
+    if uid not in data["users"]:
+        data["users"][uid] = {
+            "daily_time": None,
+            "enabled": 0,
+            "ingredients": [],
+            "saved_recipes": [],
+            "flags": {"await_manual": False, "busy": False, "last_ingredients": []}
+        }
+    if daily_time is not None:
+        data["users"][uid]["daily_time"] = daily_time
+    if enabled is not None:
+        data["users"][uid]["enabled"] = enabled
+    _write(data)
+
+def add_ingredients(user_id: int, items: List[str]):
+    data = _read()
+    uid = str(user_id)
+    if uid not in data["users"]:
+        upsert_user(user_id)
+        data = _read()
+    current = data["users"][uid]["ingredients"]
+    for it in items:
+        if it not in current:
+            current.append(it)
+    data["users"][uid]["flags"]["last_ingredients"] = items
+    _write(data)
+
+def list_ingredients(user_id: int) -> List[Tuple[int, str, Optional[str]]]:
+    data = _read()
+    uid = str(user_id)
+    if uid not in data["users"]:
+        return []
+    return [(i+1, name, None) for i, name in enumerate(data["users"][uid]["ingredients"])]
 
 def clear_ingredients(user_id: int):
-    with _cx() as cx:
-        cx.execute("DELETE FROM ingredients WHERE user_id=?", (user_id,))
-        cx.commit()
+    data = _read()
+    uid = str(user_id)
+    if uid in data["users"]:
+        data["users"][uid]["ingredients"] = []
+        data["users"][uid]["flags"]["last_ingredients"] = []
+        _write(data)
+
+def set_flag(user_id: int, name: str, value):
+    data = _read()
+    uid = str(user_id)
+    if uid not in data["users"]:
+        upsert_user(user_id)
+        data = _read()
+    data["users"][uid]["flags"][name] = value
+    _write(data)
+
+def get_flag(user_id: int, name: str):
+    data = _read()
+    uid = str(user_id)
+    if uid not in data["users"]:
+        return None
+    return data["users"][uid]["flags"].get(name)
+
+def save_recipe_for_user(user_id: int, title: str, text: str, ingredients: List[str]):
+    data = _read()
+    uid = str(user_id)
+    if uid not in data["users"]:
+        upsert_user(user_id)
+        data = _read()
+    rid = data.get("next_recipe_id", 1)
+    rec = {"id": rid, "title": title, "text": text, "ingredients": ingredients}
+    data["users"][uid]["saved_recipes"].append(rec)
+    data["next_recipe_id"] = rid + 1
+    _write(data)
+    return rec
+
+def list_saved_recipes(user_id: int):
+    data = _read()
+    uid = str(user_id)
+    if uid not in data["users"]:
+        return []
+    return data["users"][uid]["saved_recipes"]
+
+def get_last_ingredients(user_id: int):
+    data = _read()
+    uid = str(user_id)
+    if uid not in data["users"]:
+        return []
+    return data["users"][uid]["flags"].get("last_ingredients", [])
