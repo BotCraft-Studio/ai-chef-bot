@@ -1,18 +1,9 @@
-import configparser
 import importlib.util
 import os
 
 from pymongo import MongoClient
 
-# Загружаем настройки из файла config.ini
-config = configparser.ConfigParser()
-config.read('config.ini')
-
-# Получаем данные из конфиг файла
-DB_URI = config['mongo']['uri']
-DB_NAME = config['mongo']['database']
-MIGRATIONS_FOLDER = config['mongo']['migrations']
-MIGRATIONS_LOG_FOLDER = 'database_migrations'
+from app.config import DB_URI, DB_NAME, ENABLE_MIGRATIONS, MIGRATIONS_FOLDER, MIGRATIONS_LOG_COLLECTION
 
 
 # Функция загрузки файла миграции в роли модуля
@@ -23,14 +14,13 @@ def load_migration(file_path):
     return module
 
 
-def manage_migrations(is_migration_enabled: bool | None):
+def manage_migrations():
     """
     Функция загружает и применяет файлы миграций в директории,
     которая указана в качестве значения для переменной MIGRATIONS_FOLDER
-    :param is_migration_enabled: флаг, определяющий запуск миграций
-    :return: nothing
     """
-    if is_migration_enabled == "true":
+
+    if ENABLE_MIGRATIONS:
         print("Внимание: Миграции включены!")
 
         # Подключение к MongoDB
@@ -38,7 +28,7 @@ def manage_migrations(is_migration_enabled: bool | None):
         db = client[DB_NAME]
 
         # Коллекция для логов миграций
-        migrations_collection = db[MIGRATIONS_LOG_FOLDER]
+        migrations_collection = db[MIGRATIONS_LOG_COLLECTION]
 
         # Получаем список файлов миграций
         files = sorted(os.listdir(MIGRATIONS_FOLDER))
@@ -63,9 +53,11 @@ def manage_migrations(is_migration_enabled: bool | None):
                     print(f"Миграция {migration_name} выполнена.")
                 else:
                     print(f"Миграция {migration_name} не содержит функцию 'up()'.")
+
+        client.close()
     else:
         print("Внимание: Миграции отключены!")
 
 
 if __name__ == "__main__":
-    manage_migrations(None)
+    manage_migrations()

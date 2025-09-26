@@ -15,4 +15,8 @@ YANDEX_FOLDER_ID = os.getenv("YANDEX_FOLDER_ID", "")
 YANDEX_TIMEOUT = int(os.getenv("YANDEX_TIMEOUT", "45"))
 
 # DATABASE
+DB_URI = os.getenv("DB_URI", "mongodb://localhost:27017")
+DB_NAME = os.getenv("DB_NAME", "bsc")
 ENABLE_MIGRATIONS = os.getenv("ENABLE_MIGRATIONS", "0").lower() not in ("1", True, False)
+MIGRATIONS_FOLDER = os.getenv("MIGRATIONS_FOLDER", "migrations")
+MIGRATIONS_LOG_COLLECTION = os.getenv("MIGRATIONS_LOG_COLLECTION", "database_migrations")

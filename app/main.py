@@ -3,7 +3,7 @@ import logging
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 from app import storage
-from app.config import BOT_TOKEN, ENABLE_MIGRATIONS
+from app.config import BOT_TOKEN
 from app.db import migration_runner
 from app.handlers import (
     start, help_cmd, list_cmd, del_cmd, daily_cmd, on_text, on_callback, premium_cmd, profile_cmd
@@ -27,7 +27,7 @@ def build_app() -> Application:
 
 
 if __name__ == "__main__":
-    migration_runner.manage_migrations(ENABLE_MIGRATIONS)
+    migration_runner.manage_migrations()
     storage.init_db()
     app = build_app()
     app.run_polling(allowed_updates=None)
