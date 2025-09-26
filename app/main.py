@@ -1,12 +1,16 @@
 import logging
+
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-from app.config import BOT_TOKEN
+
 from app import storage
+from app.config import BOT_TOKEN, ENABLE_MIGRATIONS
+from app.db import migration_runner
 from app.handlers import (
     start, help_cmd, list_cmd, del_cmd, daily_cmd, on_text, on_callback, premium_cmd, profile_cmd
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
 
 def build_app() -> Application:
     app = Application.builder().token(BOT_TOKEN).build()
@@ -21,7 +25,9 @@ def build_app() -> Application:
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     return app
 
+
 if __name__ == "__main__":
+    migration_runner.manage_migrations(ENABLE_MIGRATIONS)
     storage.init_db()
     app = build_app()
     app.run_polling(allowed_updates=None)
