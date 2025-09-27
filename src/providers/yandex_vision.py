@@ -1,16 +1,16 @@
 # app/providers/yandex_vision.py
-import os
 import json
+
 import aiohttp
-from app.config import YANDEX_API_KEY, YANDEX_FOLDER_ID, YANDEX_TIMEOUT
+
+from models.yandex_api_request import YandexAPIRequest
+from src.config import YANDEX_API_KEY, YANDEX_API_URL, YANDEX_FOLDER_ID, YANDEX_TIMEOUT
 
 SYS_RECIPE = (
     "Ты шеф-повар и нутриционист. Дай 1 рецепт из списка продуктов.\n"
     "Структура:\nНазвание\nИнгредиенты (с граммами)\nШаги (5–8)\nКБЖУ на порцию (оценка)\nСоветы/замены\n"
     "Отвечай коротко и по делу, без приветствий и лишних фраз."
 )
-
-API_URL = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
 
 
 class YandexRecipes:
@@ -19,16 +19,8 @@ class YandexRecipes:
             raise RuntimeError("YANDEX_API_KEY и YANDEX_FOLDER_ID обязательны в окружении")
 
     async def _chat(self, messages: list[dict]) -> str:
-        payload = {
-            "modelUri": f"gpt://{YANDEX_FOLDER_ID}/yandexgpt",
-            "completionOptions": {
-                "stream": False,
-                "temperature": 0.6,
-                "maxTokens": "2000",
-                "reasoningOptions": {"mode": "DISABLED"}
-            },
-            "messages": messages,
-        }
+        completion_options = YandexAPIRequest.CompletionOptions(max_tokens=999, temperature=0.5)
+        payload = YandexAPIRequest(YANDEX_FOLDER_ID, messages, completion_options).to_json()
 
         headers = {
             "Authorization": f"Api-Key {YANDEX_API_KEY}",
@@ -37,7 +29,7 @@ class YandexRecipes:
 
         timeout = aiohttp.ClientTimeout(total=YANDEX_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(API_URL, headers=headers, json=payload) as resp:
+            async with session.post(YANDEX_API_URL, headers=headers, json=payload) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
 
@@ -60,15 +52,16 @@ class YandexRecipes:
         except Exception:
             pass
 
-        # fallback — вернуть весь JSON (для отладки)
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        # fallback — вывести в консоль весь JSON (для отладки)
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return "Возникла проблема во время обработки запроса"
 
     async def recipe_with_macros(self, ingredients: list[str]) -> str:
         # user_prompt — то, что получает роль user (включаем список ингредиентов + опции)
         user_prompt = (
-            "Составь подробный рецепт из этих продуктов: " + ", ".join(ingredients) +
-            ". Если чего-то не хватает — добавь базовые кладовые (масло, соль, перец). "
-            "Укажи КБЖУ как ориентировочную оценку. Пиши на русском."
+                "Составь подробный рецепт из этих продуктов: " + ", ".join(ingredients) +
+                ". Если чего-то не хватает — добавь базовые кладовые (масло, соль, перец). "
+                "Укажи КБЖУ как ориентировочную оценку. Пиши на русском."
         )
         messages = [
             {"role": "system", "text": SYS_RECIPE},

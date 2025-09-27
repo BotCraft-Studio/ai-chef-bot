@@ -1,17 +1,20 @@
-import io
-from PIL import Image
+"""
+Модуль отвечает за обработку изображений, поступающих от пользователя
+"""
+
 from telegram import Update
 from telegram.ext import ContextTypes
-from app import storage
+
+
 # from app.providers.openai_vision import OpenAIVision  # ← ЗАКОММЕНТИРУЙТЕ
 
-async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def on_photo(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     # Временная заглушка для фото
     await update.message.reply_text(
         "📷 Фото получено! Функция распознавания продуктов временно недоступна.\n\n"
         "Пожалуйста, введите продукты текстом через запятую."
     )
-    
+
     # Старый код (закомментирован)
     """
     photo = update.message.photo[-1]
