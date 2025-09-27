@@ -38,11 +38,18 @@ def after_recipe_menu():
 # NEW: меню выбора цели
 def goal_choice_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("Похудеть", callback_data="goal:lose")],
-        [InlineKeyboardButton("(ПП)", callback_data="goal:pp")],
-        [InlineKeyboardButton("Быстро", callback_data="goal:fast")],
-        [InlineKeyboardButton("Обычные", callback_data="goal:normal")],
-        [InlineKeyboardButton("Веган", callback_data="goal:vegan")],
-        [InlineKeyboardButton("Кето", callback_data="goal:keto")],
+        [# Первый ряд
+        InlineKeyboardButton("💪 Похудеть", callback_data="goal:lose"),
+        InlineKeyboardButton("🥑 ПП", callback_data="goal:pp")],
+
+        [# Первый ряд
+        InlineKeyboardButton("⏱ Быстро", callback_data="goal:fast"),
+        InlineKeyboardButton("🍲 Обычные", callback_data="goal:normal")],
+
+        [# Первый ряд
+        InlineKeyboardButton("🥦 Веган", callback_data="goal:vegan"),
+        InlineKeyboardButton("🥚 Кето-питание", callback_data="goal:keto")],
+        
+        # Первый ряд
         [InlineKeyboardButton("➕ Добавить продукты", callback_data="add_more")],
     ])

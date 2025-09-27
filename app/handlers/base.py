@@ -14,7 +14,53 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def normalize_items(raw_items):
+    uniq, seen = [], set()
+    for x in raw_items:
+        s = re.sub(r'\s+', ' ', x).strip(" .,!?:;\"'()[]").strip().lower()
+        if s and s not in seen:
+            seen.add(s)
+            uniq.append(s)
+    return uniq
 
+def smart_capitalize(s: str) -> str:
+    return " ".join(w[:1].upper() + w[1:] for w in s.split())
+
+def render_precheck(
+    items: list[str],
+    highlights: set[str] | None = None,
+    updated: bool = False
+) -> str:
+    highlights = highlights or set()
+    pretty = []
+    for it in items:
+        mark = " + " if it in highlights else ""
+        pretty.append(f"•{mark}{smart_capitalize(it)}")
+    body = "\n".join(pretty)
+
+    title = "<b>✅ Вот твои обновлённые продукты</b>" if updated else "<b>Вот твои продукты</b>"
+
+    return (
+        f"{title} (<i>{len(items)} шт.</i>)\n\n"
+        f"{body}\n\n"
+        "🎯 <b>Выбери цель</b>: ПП, Обычные и т.д.\n"
+        "<i>Подсказка: если чего-то не хватает — нажми «Добавить продукты» и дополни список.</i>"
+    )
+
+
+def normalize_items(raw_items):
+    uniq, seen = [], set()
+    for x in raw_items:
+        s = re.sub(r'\s+', ' ', x).strip(" .,!?:;\"'()[]").strip().lower()
+        if s and s not in seen:
+            seen.add(s)
+            uniq.append(s)
+    return uniq
+
+# НОВОЕ: красивое приведение к Заглавной Каждого Слова
+def smart_capitalize(s: str) -> str:
+    # корректно работает для «красный лук», «миндальное молоко» и т.п.
+    return " ".join(w[:1].upper() + w[1:] for w in s.split())
 
 # NEW: аккуратно превращаем markdown-звёздочки в HTML для Телеграма
 def format_recipe_for_telegram(ai_text: str) -> str:
@@ -37,9 +83,6 @@ def format_recipe_for_telegram(ai_text: str) -> str:
     text = re.sub(r'\n{3,}', '\n\n', text).strip()
 
     return text
-
-
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """
@@ -125,27 +168,40 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Принимаем текст ТОЛЬКО если пользователь в режиме ручного ввода
     if storage.get_flag(user_id, "await_manual"):
-        items = [x.strip() for x in text.split(",") if x.strip()]
-        if not items:
-            return await update.message.reply_text(
-                "Похоже, список пуст. Введите продукты через запятую, например: курица, рис, лук"
-            )
+        raw = [x for x in (text or "").split(",")]
+        to_add = normalize_items(raw)  # lower, без дублей
+        if not to_add:
+            return await update.message.reply_text("Список пуст. Пример: курица, рис, лук")
 
-        # Сохраняем товары пользователя
-        storage.add_ingredients(user_id, items)
+        # текущая сессия
+        session_items = context.user_data.get("session_items", [])
+        append_mode = bool(context.user_data.get("append_mode"))
 
-        # Выключаем режим ручного ввода — дальше ждём выбор цели
+        if append_mode:
+            existing = set(session_items)
+            new_only = [i for i in to_add if i not in existing]
+            session_items = session_items + new_only
+            highlights = set(new_only)
+        else:
+            session_items = to_add
+            highlights = set()
+
+        # сохранить обратно
+        context.user_data["session_items"] = session_items
         storage.set_flag(user_id, "await_manual", False)
 
-        # Список для показа
-        products_list = "\n".join(f"• {name}" for _, name, _ in storage.list_ingredients(user_id))
-        reply_text = (
-            "Вот твои продукты:\n"
-            f"{products_list}\n\n"
-            "Самое важное — под какую цель делаем рецепт?"
-        )
+        # Показать НОВЫЙ пречек (старый остаётся), с пометкой «+» у добавленных
+        is_updated = append_mode and bool(highlights)  # True, если это именно добавление и есть новые позиции
+        precheck = render_precheck(session_items, highlights, updated=is_updated)
 
-        return await update.message.reply_text(reply_text, reply_markup=goal_choice_menu())
+        await update.message.reply_text(
+            precheck,
+            reply_markup=goal_choice_menu(),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True
+        )
+        return
+
 
     # Иначе — подсказка
     keyboard = [
@@ -182,64 +238,16 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif data == "add_more":
-        # Включаем режим ручного ввода, чтобы принять доп. продукты
+        context.user_data.setdefault("session_items", [])
+        context.user_data["append_mode"] = True
         storage.set_flag(user_id, "await_manual", True)
-        await q.message.edit_text(
+
+        # Тоже reply_text — пречек остаётся видимым
+        await q.message.reply_text(
             "Добавь продукты через запятую, я их ДОБАВЛЮ к текущему списку.\n\n"
             "Например: сыр, помидоры, оливковое масло"
         )
-
-    elif data.startswith("goal:"):
-        goal_map = {
-            "goal:lose":   "похудение",
-            "goal:pp":     "правильное питание (ПП)",
-            "goal:fast":   "быстрый рецепт",
-            "goal:normal": "обычный рецепт",
-            "goal:vegan":  "веганский рецепт",
-            "goal:keto":   "кето-рецепт",
-        }
-        goal_name = goal_map.get(data, "обычный рецепт")
-
-        # Берём актуальные продукты из хранилища
-        rows = storage.list_ingredients(user_id)
-        items = [name for _, name, _ in rows]
-
-        if not items:
-            return await q.message.edit_text(
-                "Не вижу продуктов. Введите продукты через запятую, например: курица, рис, лук",
-                reply_markup=main_menu()
-            )
-
-        # Генерируем рецепт
-        if storage.get_flag(user_id, "busy"):
-            return await q.message.reply_text("⏳ Я уже генерирую рецепт — подождите немного.")
-        storage.set_flag(user_id, "busy", True)
-
-        try:
-            ai = YandexRecipes()
-            # Простой способ «передать» цель модели — добавить строку-установку
-            prompt_items = [f"Цель: {goal_name}"] + items
-            reply = await ai.recipe_with_macros(prompt_items)
-            pretty = format_recipe_for_telegram(reply)
-
-            # сохраним последний рецепт
-            context.user_data["last_generated_recipe"] = {
-                "text": reply,
-                "ingredients": items,
-                "title": items[0] if items else "Рецепт"
-            }
-        except Exception as e:
-            storage.set_flag(user_id, "busy", False)
-            return await q.message.edit_text(f"Ошибка при запросе рецепта: {e}")
-
-        storage.set_flag(user_id, "busy", False)
-
-        await q.message.edit_text(
-            pretty,
-            reply_markup=after_recipe_menu(),
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True
-        )    
+   
 
     elif data == "goal_recipe":
         await q.message.edit_text("🎯 Выберите способ ввода продуктов:", reply_markup=goal_submenu())
@@ -248,12 +256,57 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.edit_text("📷 Отправьте фото продуктов\n\nСовет: сфотографируйте продукты на светлом фоне для лучшего распознавания")
 
     elif data == "manual_input":
-        # Установим флаг ожидания ручного ввода
+        # чистый лист в СЕССИИ
+        context.user_data["session_items"] = []
+        context.user_data["append_mode"] = False
         storage.set_flag(user_id, "await_manual", True)
+
+        # ВАЖНО: не edit_text (это замещает пречек), а reply_text — пречек останется!
+        await q.message.reply_text(
+            "⌨️ Введите продукты через запятую:\n\nПример: курица, рис, лук, морковь"
+        )
+
+    elif data.startswith("goal:"):
+        # 1) продукты берём из того, что пользователь только что ввёл
+        items = context.user_data.get("session_items", [])
+        if not items:
+            return await q.message.reply_text("Сначала введите продукты через запятую.")
+
+        # 2) карта целей
+        goal_map = {
+            "goal:pp":     "Правильное питание (ПП)",
+            "goal:normal": "Обычный домашний рецепт",
+        }
+        goal_name = goal_map.get(data, "Обычный домашний рецепт")
+
+        # 3) генерируем рецепт с учётом цели
+        if storage.get_flag(user_id, "busy"):
+            return await q.message.reply_text("⏳ Я уже генерирую рецепт — подождите немного.")
+        storage.set_flag(user_id, "busy", True)
+        try:
+            ai = YandexRecipes()
+            # быстрый способ «передать» цель модели — добавить строкой к запросу:
+            items_with_goal = [f"Цель: {goal_name}"] + items
+            reply = await ai.recipe_with_macros(items_with_goal)
+            pretty = format_recipe_for_telegram(reply)
+
+            # сохраним для кнопки «Сгенерировать другой»
+            context.user_data["goal_code"] = data  # например, "goal:pp"
+            context.user_data["last_generated_recipe"] = {
+                "text": reply,
+                "ingredients": items,
+                "title": items[0] if items else "Рецепт"
+            }
+        except Exception as e:
+            storage.set_flag(user_id, "busy", False)
+            return await q.message.edit_text(f"Ошибка при запросе рецепта: {e}")
+        storage.set_flag(user_id, "busy", False)
+
         await q.message.edit_text(
-            "⌨️ Введите продукты через запятую:\n\n"
-            "Пример: курица, рис, лук, морковь\n\n"
-            "Я предложу рецепт с расчетом КБЖУ!",
+            pretty,
+            reply_markup=after_recipe_menu(),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True
         )
 
     elif data == "regenerate":
@@ -306,6 +359,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif data == "back_to_main":
+        
         await q.message.edit_text("Выберите опцию:", reply_markup=main_menu())
 
     elif data == "buy_pro":
