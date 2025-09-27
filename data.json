@@ -8,7 +8,11 @@
         "курица",
         "лук",
         "рис",
-        "морковь"
+        "морковь",
+        "Макароны",
+        "сыр",
+        "перец",
+        "соль"
       ],
       "saved_recipes": [
         {
@@ -36,10 +40,10 @@
         "await_manual": false,
         "busy": false,
         "last_ingredients": [
-          "курица",
-          "рис",
-          "лук",
-          "морковь"
+          "Макароны",
+          "сыр",
+          "перец",
+          "соль"
         ]
       }
     },
@@ -82,6 +86,17 @@
         "last_ingredients": [
           "лук"
         ]
+      }
+    },
+    "7794688577": {
+      "daily_time": null,
+      "enabled": 0,
+      "ingredients": [],
+      "saved_recipes": [],
+      "flags": {
+        "await_manual": true,
+        "busy": false,
+        "last_ingredients": []
       }
     }
   },
