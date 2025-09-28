@@ -39,5 +39,3 @@ if __name__ == "__main__":
     storage.init_db()
     app = build_app()
     app.run_polling(allowed_updates=None)
-
-
