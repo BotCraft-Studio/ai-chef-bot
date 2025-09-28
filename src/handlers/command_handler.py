@@ -21,17 +21,11 @@ async def start_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
 • Рассчитывать точное КБЖУ для каждой порции
 • Предлагать сезонные рецепты дня
 • Помогать достигать ваших целей питания
-        
+
 👇 Выберите действие:
     """
+    await update.message.reply_text(text, reply_markup=main_menu())
 
- # Отправляем GIF с текстом
-    with open("src/assets/chef.gif", "rb") as gif:
-        await update.message.reply_animation(
-            animation=gif,
-            caption=text,
-            reply_markup=main_menu()
-        )
 
 async def help_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     text = """
