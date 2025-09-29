@@ -2,6 +2,7 @@ import logging
 
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
+from db import storage_new
 from handlers import on_photo
 from src import storage
 from src.config import BOT_TOKEN
@@ -36,8 +37,11 @@ def build_app() -> Application:
 
 
 if __name__ == "__main__":
+    # Проверить соединение с БД
+    storage_new.get_connection().close()
     storage.init_db()
     app = build_app()
+    # Запустить бота
     app.run_polling(allowed_updates=None)
 
 
