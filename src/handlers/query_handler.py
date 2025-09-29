@@ -238,7 +238,7 @@ async def clear_ingredients(user_id: int, query: CallbackQuery | None):
 
 
 async def back_to_main_menu(query: CallbackQuery | None):
-    await query.message.edit_text("Выберите опцию:", reply_markup=goal_submenu())
+    await query.message.edit_text("Выберите опцию:", reply_markup=main_menu())
 
 
 async def buy_pro(query: CallbackQuery | None):
