@@ -1,15 +1,23 @@
 """
 Модуль отвечает за обработку команд, поступающих от пользователя
 """
+import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes
 
 import storage
+from db import storage_new
+from db.entities.user_entity import UserEntity
 from keyboards import premium_menu, profile_menu, main_menu
+from utils.bot_utils import IS_USER
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 
-async def start_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    is_new_user = context.user_data.get(IS_USER)
     text = """
 🍳 Добро пожаловать в AI-Chef! 👨‍🍳
 
@@ -21,17 +29,17 @@ async def start_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
 • Рассчитывать точное КБЖУ для каждой порции
 • Предлагать сезонные рецепты дня
 • Помогать достигать ваших целей питания
-        
+
 👇 Выберите действие:
     """
 
- # Отправляем GIF с текстом
-    with open("src/assets/chef.gif", "rb") as gif:
-        await update.message.reply_animation(
-            animation=gif,
-            caption=text,
-            reply_markup=main_menu()
-        )
+    await update.message.reply_text(text, reply_markup=main_menu())
+
+    if not is_new_user:
+        user_id = storage_new.add_user(UserEntity.from_message(update.message))
+        context.user_data[IS_USER] = True
+        logger.info(f"Добавлен новый пользователь c id: [{user_id}]")
+
 
 async def help_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     text = """

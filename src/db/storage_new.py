@@ -19,7 +19,7 @@ def get_connection() -> Connection:
         raise e
 
 
-def add_user(user: UserEntity):
+def add_user(user: UserEntity) -> int:
     con = get_connection()
     try:
         with con:
@@ -29,9 +29,11 @@ def add_user(user: UserEntity):
                     """
                     INSERT INTO users (user_id, name, login)
                     VALUES (%s, %s, %s)
+                    RETURNING user_id;
                     """,
                     (user.id, user.name, user.login)
                 )
+                user_id = cur.fetchone()
                 # Добавляем запись в таблицу с ингредиентами пользователей
                 # По дефолту инициализируем список ингредиентов пользователя как пустой массив
                 cur.execute(
@@ -41,6 +43,7 @@ def add_user(user: UserEntity):
                     """,
                     (user.id, [])
                 )
+                return user_id
     except psycopg.Error as e:
         logger.error("Ошибка при добавлении пользователя:", exc_info=True)
         raise e

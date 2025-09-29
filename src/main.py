@@ -43,5 +43,3 @@ if __name__ == "__main__":
     app = build_app()
     # Запустить бота
     app.run_polling(allowed_updates=None)
-
-
