@@ -37,20 +37,36 @@ SEASONAL = {
 
 AI = YandexRecipes()
 
-
 async def daily_recipe(query: CallbackQuery | None):
+    # 1) Показываем баннер перед генерацией (редактируем ТО ЖЕ сообщение → будет красивая анимация)
+    await query.message.edit_text(
+        ai_progress_text(subtitle="Рецепт дня на основе сезонных продуктов"),
+        parse_mode=ParseMode.HTML
+    )
+
+    # 2) Выбираем тему для рецепта дня (как и было)
     month = datetime.datetime.now().month
     seasonal_recipes = SEASONAL.get(month, [])
     recipe_name = seasonal_recipes[0] if seasonal_recipes else "Сезонный рецепт"
 
-    reply = await AI.recipe_with_macros([recipe_name])
-    pretty = format_recipe_for_telegram(reply)
-    await query.message.edit_text(
-        f"✨ Рецепт дня!\n\n{pretty}",
-        reply_markup=main_menu(),
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True
-    )
+    try:
+        # 3) Генерируем рецепт у ИИ
+        reply = await AI.recipe_with_macros([recipe_name])
+        pretty = format_recipe_for_telegram(reply)
+
+        # 4) Заменяем баннер на готовый рецепт (снова редактируем то же сообщение → вторая анимация)
+        await query.message.edit_text(
+            f"✨ Рецепт дня!\n\n{pretty}",
+            reply_markup=main_menu(),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True
+        )
+    except Exception:
+        # лаконичное сообщение об ошибке (тоже редактирование, без спама новыми сообщениями)
+        await query.message.edit_text(
+            "⚠️ Не удалось сгенерировать рецепт дня. Попробуйте ещё раз чуть позже.",
+            parse_mode=ParseMode.HTML
+        )
 
 
 async def add_ingredient(query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
@@ -92,41 +108,52 @@ async def goal_recipe_choice(user_input: str, query: CallbackQuery | None, conte
     if not items:
         return await query.message.reply_text("Сначала введите продукты через запятую.")
 
-    # 2) Получаем человеческое описание цели для рецепта из словаря
+    # 2) читаем «человеческое» название цели
     goal_name = GOALS.get(user_input, "Обычный домашний рецепт")
 
-    # 3) генерируем рецепт с учётом цели
+    # 3) проверка занятости
     if bool(context.user_data.get(BUSY)):
         return await query.message.reply_text("⏳ Я уже генерирую рецепт — подождите немного.")
-    context.user_data["busy"] = True
+    context.user_data[BUSY] = True  # не забудь: и читаем, и пишем один и тот же ключ
 
     try:
-        # быстрый способ «передать» цель модели — добавить строкой к запросу:
+        # (а) показываем баннер — это даст красивую анимацию «рассыпания»
+        await query.message.edit_text(
+            ai_progress_text(subtitle=f"Цель: <i>{goal_name}</i>"),
+            parse_mode=ParseMode.HTML
+        )
+
+        # (б) вызываем ИИ (как и раньше)
         items_with_goal = [f"Цель: {goal_name}"] + items
         reply = await AI.recipe_with_macros(items_with_goal)
+
+        # (в) приводим текст к красивому HTML (как у тебя уже сделано)
         pretty = format_recipe_for_telegram(reply)
 
-        # сохраним для кнопки «Сгенерировать другой»
+        # (г) сохраняем для кнопки «Сгенерировать другой»
         context.user_data[GOAL_CODE] = user_input  # например, "goal_pp"
         context.user_data[LAST_GENERATED_RECIPE] = {
             "text": reply,
             "ingredients": items,
             "title": items[0] if items else "Рецепт"
         }
+
+        # (д) заменяем баннер на готовый рецепт (ещё одна красивая анимация)
+        await query.message.edit_text(
+            pretty,
+            reply_markup=after_recipe_menu(),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True
+        )
+
     except Exception as e:
         logger.error(e)
-        return await query.message.edit_text(f"Возникла ошибка при запросе генерации рецепта")
+        await query.message.edit_text("⚠️ Возникла ошибка при запросе генерации рецепта.")
     finally:
         context.user_data[BUSY] = False
 
-    await query.message.edit_text(
-        pretty,
-        reply_markup=after_recipe_menu(),
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True
-    )
-
     return None
+
 
 
 async def regenerate_recipe(query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
@@ -249,3 +276,13 @@ def format_recipe_for_telegram(ai_text: str) -> str:
     text = re.sub(r'\n{3,}', '\n\n', text).strip()
 
     return text
+
+
+# НОВОЕ: Информационное сообщение при генерации рецепта
+def ai_progress_text(subtitle: str = "") -> str:
+    subtitle = f"\n{subtitle}" if subtitle else ""
+    return (
+        "🤖 <b>Генерирую рецепт с помощью ИИ</b>"
+        f"{subtitle}\n"
+        "⏳ Пожалуйста, подождите 5–10 секунд…"
+    )
