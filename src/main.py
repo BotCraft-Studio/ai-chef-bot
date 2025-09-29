@@ -2,6 +2,7 @@ import logging
 
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
+from handlers.command_handler import privacy_cmd
 from handlers import on_photo
 from src import storage
 from src.config import BOT_TOKEN
@@ -31,6 +32,7 @@ def build_app() -> Application:
     application.add_handler(CallbackQueryHandler(on_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     application.add_handler(MessageHandler(filters.PHOTO, on_photo))
+    application.add_handler(CommandHandler("privacy", privacy_cmd))
 
     return application
 
