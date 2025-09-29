@@ -2,7 +2,6 @@ import logging
 
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
-from handlers.command_handler import privacy_cmd
 from handlers import on_photo
 from src import storage
 from src.config import BOT_TOKEN
@@ -14,7 +13,8 @@ from src.handlers.command_handler import (
     list_cmd,
     premium_cmd,
     profile_cmd,
-    start_cmd
+    start_cmd,
+    privacy_cmd
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")

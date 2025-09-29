@@ -12,7 +12,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 import storage
-from keyboards import main_menu, goal_submenu, after_recipe_menu, profile_menu, premium_menu
+from keyboards import main_menu, goal_submenu, after_recipe_menu, profile_menu, premium_menu, textback_submenu, photoback_submenu
 from providers.yandex_vision import YandexRecipes
 from utils.bot_utils import APPEND_MODE, SESSION_ITEMS, AWAIT_MANUAL, BUSY, GOAL_CODE, LAST_GENERATED_RECIPE
 from utils.goal_utils import GOALS
@@ -87,7 +87,9 @@ async def goal_recipe(query: CallbackQuery | None):
 
 async def upload_photo(query: CallbackQuery | None):
     await query.message.edit_text(
-        "📷 Отправьте фото продуктов\n\nСовет: сфотографируйте продукты на светлом фоне для лучшего распознавания")
+        "📷 Отправьте фото продуктов\n\nСовет: сфотографируйте продукты на светлом фоне для лучшего распознавания",
+        reply_markup=textback_submenu(),
+    )
 
 
 async def manual_input(query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
@@ -97,8 +99,9 @@ async def manual_input(query: CallbackQuery | None, context: ContextTypes.DEFAUL
     context.user_data[AWAIT_MANUAL] = True
 
     # ВАЖНО: не edit_text (это замещает пречек), а reply_text — пречек останется!
-    await query.message.reply_text(
-        "⌨️ Введите продукты через запятую:\n\nПример: курица, рис, лук, морковь"
+    await query.message.edit_text(
+        "⌨️ Введите продукты через запятую:\n\nПример: курица, рис, лук, морковь",
+        reply_markup=photoback_submenu(),
     )
 
 
