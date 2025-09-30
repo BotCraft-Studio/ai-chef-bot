@@ -23,3 +23,12 @@ DB_NAME = os.getenv("DB_NAME", "bcs")
 DB_USER = os.getenv("DB_USER", "bcs")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "bcs")
 DB_ENABLE_MIGRATIONS = os.getenv("ENABLE_MIGRATIONS", "0").lower() not in ("1", True, False)
+
+# GIGACHAT
+GIGACHAT_BASE_URL = os.getenv("GIGACHAT_BASE_URL", "https://gigachat.devices.sberbank.ru/api/v1")
+GIGACHAT_CLIENT_ID = os.getenv("GIGACHAT_CLIENT_ID", "")
+GIGACHAT_CLIENT_SECRET = os.getenv("GIGACHAT_CLIENT_SECRET", "")
+GIGACHAT_SCOPE = os.getenv("GIGACHAT_SCOPE", "GIGACHAT_API_PERS")
+GIGACHAT_TEXT_MODEL = os.getenv("GIGACHAT_TEXT_MODEL", "GigaChat")
+GIGACHAT_VISION_MODEL = os.getenv("GIGACHAT_VISION_MODEL", "GigaChat-Pro")
+GIGACHAT_VERIFY_SSL = os.getenv("GIGACHAT_VERIFY_SSL", "1") not in ("0", "false", "False")
