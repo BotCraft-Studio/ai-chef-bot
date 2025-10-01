@@ -79,3 +79,15 @@ def goal_choice_menu():
         # Первый ряд
         [InlineKeyboardButton("➕ Добавить продукты", callback_data=ADD_INGREDIENT)],
     ])
+
+def photoback_submenu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📷 Загрузить фото продуктов", callback_data=UPLOAD_PHOTO)],
+        [InlineKeyboardButton("🔙 Назад", callback_data=GOAL_RECIPE)],
+    ])
+
+def textback_submenu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⌨️ Ввести продукты вручную", callback_data=MANUAL_INPUT)],
+        [InlineKeyboardButton("🔙 Назад", callback_data=GOAL_RECIPE)],
+    ])

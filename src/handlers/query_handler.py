@@ -12,13 +12,15 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 import storage
-from keyboards import main_menu, goal_submenu, after_recipe_menu, profile_menu, premium_menu
-from providers.yandex_vision import YandexRecipes
+from keyboards import main_menu, goal_submenu, after_recipe_menu, profile_menu, premium_menu, textback_submenu, photoback_submenu
+from providers.gigachat import GigaChatText
 from utils.bot_utils import APPEND_MODE, SESSION_ITEMS, AWAIT_MANUAL, BUSY, GOAL_CODE, LAST_GENERATED_RECIPE
 from utils.goal_utils import GOALS
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+AI = GigaChatText()
 
 SEASONAL = {
     1: ["Тыквенный крем-суп", "Запечённые корнеплоды", "Глинтвейн без алкоголя"],
@@ -35,8 +37,6 @@ SEASONAL = {
     12: ["Утка с яблоками", "Сырный крем-суп", "Имбирное печенье"],
 }
 
-AI = YandexRecipes()
-
 async def daily_recipe(query: CallbackQuery | None):
     # 1) Показываем баннер перед генерацией (редактируем ТО ЖЕ сообщение → будет красивая анимация)
     await query.message.edit_text(
@@ -51,7 +51,7 @@ async def daily_recipe(query: CallbackQuery | None):
 
     try:
         # 3) Генерируем рецепт у ИИ
-        reply = await AI.recipe_with_macros([recipe_name])
+        reply = await AI.parse_ingredients([recipe_name])
         pretty = format_recipe_for_telegram(reply)
 
         # 4) Заменяем баннер на готовый рецепт (снова редактируем то же сообщение → вторая анимация)
@@ -87,7 +87,9 @@ async def goal_recipe(query: CallbackQuery | None):
 
 async def upload_photo(query: CallbackQuery | None):
     await query.message.edit_text(
-        "📷 Отправьте фото продуктов\n\nСовет: сфотографируйте продукты на светлом фоне для лучшего распознавания")
+        "📷 Отправьте фото продуктов\n\nСовет: сфотографируйте продукты на светлом фоне для лучшего распознавания",
+        reply_markup=textback_submenu(),
+    )
 
 
 async def manual_input(query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
@@ -97,8 +99,9 @@ async def manual_input(query: CallbackQuery | None, context: ContextTypes.DEFAUL
     context.user_data[AWAIT_MANUAL] = True
 
     # ВАЖНО: не edit_text (это замещает пречек), а reply_text — пречек останется!
-    await query.message.reply_text(
-        "⌨️ Введите продукты через запятую:\n\nПример: курица, рис, лук, морковь"
+    await query.message.edit_text(
+        "⌨️ Введите продукты через запятую:\n\nПример: курица, рис, лук, морковь",
+        reply_markup=photoback_submenu(),
     )
 
 
@@ -125,7 +128,7 @@ async def goal_recipe_choice(user_input: str, query: CallbackQuery | None, conte
 
         # (б) вызываем ИИ (как и раньше)
         items_with_goal = [f"Цель: {goal_name}"] + items
-        reply = await AI.recipe_with_macros(items_with_goal)
+        reply = await AI.parse_ingredients(items_with_goal)
 
         # (в) приводим текст к красивому HTML (как у тебя уже сделано)
         pretty = format_recipe_for_telegram(reply)
@@ -170,7 +173,7 @@ async def regenerate_recipe(query: CallbackQuery | None, context: ContextTypes.D
     context.user_data[BUSY] = True
 
     try:
-        reply = await AI.recipe_with_macros(last_ingredients)
+        reply = await AI.parse_ingredients(last_ingredients)
         pretty = format_recipe_for_telegram(reply)
     except Exception as e:
         return await query.message.edit_text(f"Ошибка генерации: {e}", reply_markup=main_menu())
