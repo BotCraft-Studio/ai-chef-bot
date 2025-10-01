@@ -1,7 +1,7 @@
 import logging
 import re
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
@@ -17,13 +17,14 @@ from handlers.query_handler import (
     my_ingredients,
     regenerate_recipe,
     save_recipe,
-    upload_photo
+    upload_photo, back_to_goal_selection, handle_time_selection, handle_goal_selection
 )
-from src.keyboards import goal_choice_menu
+from handlers.query_handler import goal_recipe_choice_with_time
+from src.keyboards import goal_choice_menu, time_selection_menu
 from utils import query_utils
-from utils.bot_utils import BUSY, AWAIT_MANUAL, SESSION_ITEMS, APPEND_MODE
+from utils.bot_utils import BUSY, AWAIT_MANUAL, SESSION_ITEMS, APPEND_MODE, TIME_OPTIONS, SELECTED_TIME, GOAL_CODE
 from utils.goal_utils import GOALS
-from utils.query_utils import MANUAL_INPUT
+from utils.query_utils import MANUAL_INPUT, smart_capitalize
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -61,14 +62,15 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data[AWAIT_MANUAL] = False
 
         # Показать НОВЫЙ пречек (старый остаётся), с пометкой «+» у добавленных
-        is_updated = append_mode and bool(highlights)  # True, если это именно добавление и есть новые позиции
+        is_updated = append_mode and bool(highlights)
         precheck = render_precheck(session_items, highlights, updated=is_updated)
 
+        # ⬇️⬇️⬇️ ТЕПЕРЬ СНАЧАЛА ПОКАЗЫВАЕМ ВЫБОР ЦЕЛИ ⬇️⬇️⬇️
         await update.message.reply_text(
             precheck,
-            reply_markup=goal_choice_menu(),
             parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True
+            disable_web_page_preview=True,
+            reply_markup=goal_choice_menu()  # ← сразу показываем цели
         )
         return None
 
@@ -113,10 +115,18 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await save_recipe(user_id, query, context)
         case query_utils.UPLOAD_PHOTO:
             await upload_photo(query)
+        case query_utils.BACK_TO_GOAL_SELECTION:  # ← ДОБАВЬТЕ ЭТОТ СЛУЧАЙ
+            # Возврат к выбору цели
+            await back_to_goal_selection(query, context)
+
+        case user_input if user_input in TIME_OPTIONS:
+            # Обработка выбора времени
+            await handle_time_selection(user_input, query, context)
         case _:
             # Случай, когда пользователь выбрал цель рецепта
             if user_input in GOALS:
-                await goal_recipe_choice(user_input, query, context)
+                # ТЕПЕРЬ ПОСЛЕ ВЫБОРА ЦЕЛИ ПОКАЗЫВАЕМ ВЫБОР ВРЕМЕНИ
+                await handle_goal_selection(user_input, query, context)
 
 
 def normalize_items(raw_items):
@@ -149,8 +159,3 @@ def render_precheck(
         "🎯 <b>Выбери цель</b>: ПП, Обычные и т.д.\n"
         "<i>Подсказка: если чего-то не хватает — нажми «Добавить продукты» и дополни список.</i>"
     )
-
-# Красивое приведение к Заглавной Каждого Слова
-def smart_capitalize(s: str) -> str:
-    # корректно работает для «красный лук», «миндальное молоко» и т.п.
-    return " ".join(w[:1].upper() + w[1:] for w in s.split())
