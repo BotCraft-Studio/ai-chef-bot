@@ -18,7 +18,7 @@ from utils.query_utils import (
     MY_INGREDIENTS,
     REGENERATE_RECIPE,
     SAVE_RECIPE,
-    UPLOAD_PHOTO
+    UPLOAD_PHOTO, BACK_TO_GOAL_SELECTION
 )
 
 
@@ -91,3 +91,30 @@ def textback_submenu():
         [InlineKeyboardButton("⌨️ Ввести продукты вручную", callback_data=MANUAL_INPUT)],
         [InlineKeyboardButton("🔙 Назад", callback_data=GOAL_RECIPE)],
     ])
+
+
+def time_selection_menu():
+    """Клавиатура для выбора времени готовки (2 кнопки в ряд)"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from utils.bot_utils import TIME_OPTIONS
+
+    # Создаем список пар кнопок (по 2 в каждом ряду)
+    buttons = []
+    time_items = list(TIME_OPTIONS.items())
+
+    # Первый ряд: первые 2 кнопки
+    buttons.append([
+        InlineKeyboardButton(time_items[0][1], callback_data=time_items[0][0]),  # До 15 мин
+        InlineKeyboardButton(time_items[1][1], callback_data=time_items[1][0])  # До 30 мин
+    ])
+
+    # Второй ряд: следующие 2 кнопки
+    buttons.append([
+        InlineKeyboardButton(time_items[2][1], callback_data=time_items[2][0]),  # До 60 мин
+        InlineKeyboardButton(time_items[3][1], callback_data=time_items[3][0])  # Не важно
+    ])
+
+    # Третий ряд: кнопка "Назад" (одна на весь ряд)
+    buttons.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_goal_selection")])
+
+    return InlineKeyboardMarkup(buttons)

@@ -7,14 +7,16 @@ import html
 import logging
 import re
 
-from telegram import CallbackQuery
+from telegram import Update, CallbackQuery
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 import storage
-from keyboards import main_menu, goal_submenu, after_recipe_menu, profile_menu, premium_menu, textback_submenu, photoback_submenu
+
+from utils.query_utils import smart_capitalize
+from keyboards import main_menu, goal_submenu, after_recipe_menu, profile_menu, premium_menu, textback_submenu, photoback_submenu, time_selection_menu, goal_choice_menu
 from providers.gigachat import GigaChatText
-from utils.bot_utils import APPEND_MODE, SESSION_ITEMS, AWAIT_MANUAL, BUSY, GOAL_CODE, LAST_GENERATED_RECIPE
+from utils.bot_utils import APPEND_MODE, SESSION_ITEMS, AWAIT_MANUAL, BUSY, GOAL_CODE, LAST_GENERATED_RECIPE, SELECTED_TIME, TIME_OPTIONS
 from utils.goal_utils import GOALS
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -288,4 +290,142 @@ def ai_progress_text(subtitle: str = "") -> str:
         "🤖 <b>Генерирую рецепт с помощью ИИ</b>"
         f"{subtitle}\n"
         "⏳ Пожалуйста, подождите 5–10 секунд…"
+    )
+
+
+async def show_time_selection_after_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает меню выбора времени после текстового ввода"""
+    items = context.user_data.get(SESSION_ITEMS, [])
+
+    if not items:
+        return await update.message.reply_text(
+            "Сначала введите продукты",
+            reply_markup=main_menu()
+        )
+
+    # Красиво показываем продукты
+    def smart_capitalize(s: str) -> str:
+        return " ".join(w[:1].upper() + w[1:] for w in s.split())
+
+    items_text = "\n".join([f"• {smart_capitalize(item)}" for item in items[:5]])
+    if len(items) > 5:
+        items_text += f"\n• ... и ещё {len(items) - 5} продуктов"
+
+    # Используем reply_text вместо edit_text
+    await update.message.reply_text(
+        f"🍳 <b>Ваши продукты</b> ({len(items)} шт.):\n\n"
+        f"{items_text}\n\n"
+        f"⏰ <b>Выберите время готовки:</b>",
+        reply_markup=time_selection_menu(),
+        parse_mode=ParseMode.HTML
+    )
+async def goal_recipe_choice_with_time(goal_code: str, time_code: str, query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Генерирует рецепт с учётом цели и времени"""
+    items = context.user_data.get(SESSION_ITEMS, [])
+    if not items:
+        return await query.message.reply_text("Сначала введите продукты через запятую.")
+
+    goal_name = GOALS.get(goal_code, "Обычный домашний рецепт")
+    time_display = TIME_OPTIONS.get(time_code, "Не важно")
+
+    # проверка занятости
+    if bool(context.user_data.get(BUSY)):
+        return await query.message.reply_text("⏳ Я уже генерирую рецепт — подождите немного.")
+    context.user_data[BUSY] = True
+
+    try:
+        # показываем баннер с информацией о цели и времени
+        await query.message.edit_text(
+            ai_progress_text(subtitle=f"Цель: <i>{goal_name}</i>, Время: <i>{time_display}</i>"),
+            parse_mode=ParseMode.HTML
+        )
+
+        # добавляем цель и время в запрос к ИИ
+        items_with_goal_and_time = [f"Цель: {goal_name}", f"Время готовки: {time_display}"] + items
+        reply = await AI.recipe_with_macros(items_with_goal_and_time)
+
+        # форматируем результат
+        pretty = format_recipe_for_telegram(reply)
+
+        # сохраняем для кнопки «Сгенерировать другой»
+        context.user_data[GOAL_CODE] = goal_code
+        context.user_data[SELECTED_TIME] = time_code
+        context.user_data[LAST_GENERATED_RECIPE] = {
+            "text": reply,
+            "ingredients": items,
+            "title": items[0] if items else "Рецепт"
+        }
+
+        # заменяем баннер на готовый рецепт
+        await query.message.edit_text(
+            pretty,
+            reply_markup=after_recipe_menu(),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True
+        )
+
+    except Exception as e:
+        logger.error(e)
+        await query.message.edit_text("⚠️ Возникла ошибка при запросе генерации рецепта.")
+    finally:
+        context.user_data[BUSY] = False
+
+    return None
+
+async def handle_goal_selection(goal_code: str, query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор цели и показывает выбор времени"""
+    goal_name = GOALS.get(goal_code, "Обычный домашний рецепт")
+    context.user_data[GOAL_CODE] = goal_code  # Сохраняем выбранную цель
+
+    items = context.user_data.get(SESSION_ITEMS, [])
+    items_text = "\n".join([f"• {smart_capitalize(item)}" for item in items[:5]])
+    if len(items) > 5:
+        items_text += f"\n• ... и ещё {len(items) - 5} продуктов"
+
+    # ДОБАВЛЯЕМ ЭМОДЗИ ДЛЯ КАЖДОЙ ЦЕЛИ
+    goal_emojis = {
+        "goal_lose": "💪",  # Похудеть
+        "goal_pp": "🥑",  # ПП
+        "goal_fast": "⚡️",  # Быстро
+        "goal_normal": "🍲",  # Обычные
+        "goal_vegan": "🥦",  # Веган
+        "goal_keto": "🥚"  # Кето-питание
+    }
+
+    goal_emoji = goal_emojis.get(goal_code, "🎯")
+
+    # ⬇️⬇️⬇️ ВОТ ЗДЕСЬ ИСПРАВЛЕНИЕ - ДОБАВЛЯЕМ {goal_name} ⬇️⬇️⬇️
+    await query.message.edit_text(
+        f"🍳 <b>Ваши продукты</b> ({len(items)} шт.):\n\n"
+        f"{items_text}\n\n"
+        f"{goal_emoji} <b>Цель питания:</b> {goal_name}\n\n"  # ← ТЕПЕРЬ ЗДЕСЬ БУДЕТ "Похудеть", "ПП" и т.д.
+        f"⏰ <b>Выберите время готовки:</b>",
+        reply_markup=time_selection_menu(),
+        parse_mode=ParseMode.HTML
+    )
+
+async def handle_time_selection(time_code: str, query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор времени готовки и запускает генерацию рецепта"""
+    time_display = TIME_OPTIONS.get(time_code, "Не важно")
+    context.user_data[SELECTED_TIME] = time_code
+
+    # Получаем сохранённую цель
+    goal_code = context.user_data.get(GOAL_CODE, "goal_normal")
+
+    # Запускаем генерацию рецепта с целью и временем
+    await goal_recipe_choice_with_time(goal_code, time_code, query, context)
+
+async def back_to_goal_selection(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Возврат к выбору цели питания"""
+    items = context.user_data.get(SESSION_ITEMS, [])
+    items_text = "\n".join([f"• {smart_capitalize(item)}" for item in items[:5]])
+    if len(items) > 5:
+        items_text += f"\n• ... и ещё {len(items) - 5} продуктов"
+
+    await query.message.edit_text(
+        f"🍳 <b>Ваши продукты</b> ({len(items)} шт.):\n\n"
+        f"{items_text}\n\n"
+        f"🎯 <b>Выберите цель питания:</b>",
+        reply_markup=goal_choice_menu(),
+        parse_mode=ParseMode.HTML
     )
