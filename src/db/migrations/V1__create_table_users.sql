@@ -14,14 +14,14 @@ CREATE TABLE IF NOT EXISTS users (
     update_datetime     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON users.id IS                  'ID записи';
-COMMENT ON users.user_id IS             'ID пользователя';
-COMMENT ON users.name IS                'Имя пользователя';
-COMMENT ON users.login IS               'Логин пользователя';
-COMMENT ON users.age IS                 'Возраст пользователя';
-COMMENT ON users.sex IS                 'Пол пользователя';
-COMMENT ON users.is_pro IS              'Пользователь с платной подпиской';
-COMMENT ON users.pro_create_date IS     'Дата оформления платной подписки';
-COMMENT ON users.pro_expiration_date IS 'Дата истечения платной подписки';
-COMMENT ON users.create_datetime IS     'Дата создания записи';
-COMMENT ON users.update_datetime IS     'Дата обновления записи';
+COMMENT ON COLUMN users.id IS                  'ID записи';
+COMMENT ON COLUMN users.user_id IS             'ID пользователя';
+COMMENT ON COLUMN users.name IS                'Имя пользователя';
+COMMENT ON COLUMN users.login IS               'Логин пользователя';
+COMMENT ON COLUMN users.age IS                 'Возраст пользователя';
+COMMENT ON COLUMN users.sex IS                 'Пол пользователя';
+COMMENT ON COLUMN users.is_pro IS              'Пользователь с платной подпиской';
+COMMENT ON COLUMN users.pro_create_date IS     'Дата оформления платной подписки';
+COMMENT ON COLUMN users.pro_expiration_date IS 'Дата истечения платной подписки';
+COMMENT ON COLUMN users.create_datetime IS     'Дата создания записи';
+COMMENT ON COLUMN users.update_datetime IS     'Дата обновления записи';
