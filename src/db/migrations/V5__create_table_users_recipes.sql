@@ -1,4 +1,5 @@
 -- Таблица для хранения рецептов пользователей
+SET search_path TO dev;
 
 CREATE TABLE IF NOT EXISTS users_recipes (
     id                    SERIAL PRIMARY KEY,
@@ -11,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users_recipes (
     recipe_kcal           INTEGER,
     recipe_pfc            INT[],
     create_datetime       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES users(user_id)
+    CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Создание индекса для ускорения поиска по полю user_id

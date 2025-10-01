@@ -12,11 +12,28 @@ logger = logging.getLogger(__name__)
 
 
 def get_connection() -> Connection:
+    return connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD)
+
+
+def is_user_exist(user_id: int) -> bool:
+    con = get_connection()
     try:
-        return connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD)
+        with con:
+            with con.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT EXISTS(SELECT 1 FROM users WHERE user_id = %s)
+                    """,
+                    (user_id,)
+                )
+                result = cur.fetchone()
+                if not result or result[0] == False:
+                    return False
+                else:
+                    return True
     except psycopg.Error as e:
-        logger.error("Возникла ошибка во время попытки открыть соединение с БД:")
-        raise e
+        logger.error(e)
+        return False
 
 
 def add_user(user: UserEntity) -> int:
@@ -29,11 +46,11 @@ def add_user(user: UserEntity) -> int:
                     """
                     INSERT INTO users (user_id, name, login)
                     VALUES (%s, %s, %s)
-                    RETURNING user_id;
+                    RETURNING id;
                     """,
                     (user.id, user.name, user.login)
                 )
-                user_id = cur.fetchone()
+                user_id = cur.fetchone()[0]
                 # Добавляем запись в таблицу с ингредиентами пользователей
                 # По дефолту инициализируем список ингредиентов пользователя как пустой массив
                 cur.execute(
@@ -41,11 +58,12 @@ def add_user(user: UserEntity) -> int:
                     INSERT INTO users_ingredients (user_id, ingredients)
                     VALUES (%s, %s)
                     """,
-                    (user.id, [])
+                    (user_id, [])
                 )
+                logger.info(f"Добавлен новый пользователь c id [{user_id}]")
                 return user_id
     except psycopg.Error as e:
-        logger.error("Ошибка при добавлении пользователя:", exc_info=True)
+        logger.error(f"Ошибка при добавлении пользователя с id [{user.id}]:", exc_info=True)
         raise e
 
 

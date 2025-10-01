@@ -1,5 +1,6 @@
 import logging
 
+import psycopg
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,6 +22,7 @@ from src.handlers.command_handler import (
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 
 def build_app() -> Application:
@@ -42,7 +44,13 @@ def build_app() -> Application:
 
 if __name__ == "__main__":
     # Проверить соединение с БД
-    storage_new.get_connection().close()
+    try:
+        storage_new.get_connection().close()
+        logger.info("Проверка соединения с БД на этапе инициализации успешно пройдена")
+    except psycopg.Error as e:
+        logger.error("Возникла ошибка во время попытки открыть соединение с БД:", exc_info=True)
+        raise e
+
     app = build_app()
     # Запустить бота
     app.run_polling(allowed_updates=None)

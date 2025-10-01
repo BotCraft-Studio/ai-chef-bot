@@ -1,4 +1,6 @@
 -- Функция для обновления поля users_ingredients.update_datetime
+SET search_path TO dev;
+
 CREATE OR REPLACE FUNCTION users_ingredients_update_datetime()
 RETURNS TRIGGER AS $$
 BEGIN

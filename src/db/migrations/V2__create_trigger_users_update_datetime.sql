@@ -1,4 +1,6 @@
 -- Функция для обновления поля users.update_datetime
+SET search_path TO dev;
+
 CREATE OR REPLACE FUNCTION users_update_datetime()
 RETURNS TRIGGER AS $$
 BEGIN

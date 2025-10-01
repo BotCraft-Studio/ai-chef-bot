@@ -1,4 +1,5 @@
 -- Таблица для хранения информации о пользователях
+SET search_path TO dev;
 
 CREATE TABLE IF NOT EXISTS users (
     id                  SERIAL PRIMARY KEY,

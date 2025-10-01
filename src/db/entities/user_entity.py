@@ -1,9 +1,9 @@
-from telegram import Message
+from telegram import Message, User
 
 
 class UserEntity:
     def __init__(self,
-                 id=None,
+                 _id=None,
                  user_id=None,
                  name=None,
                  login=None,
@@ -14,7 +14,7 @@ class UserEntity:
                  pro_expiration_date=None,
                  create_datetime=None,
                  update_datetime=None):
-        self.id = id
+        self.id = _id
         self.user_id = user_id
         self.name = name
         self.login = login
@@ -27,7 +27,8 @@ class UserEntity:
         self.update_datetime = update_datetime
 
     @classmethod
-    def from_message(cls, message: Message, is_pro: bool = False):
-        return cls(name=message.from_user.full_name,
-                   login=message.from_user.username,
+    def from_tg_user(cls, user: User, is_pro: bool = False):
+        return cls(_id=user.id,
+                   name=user.full_name,
+                   login=user.username,
                    is_pro=is_pro)
