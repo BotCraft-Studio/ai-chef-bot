@@ -3,13 +3,13 @@
 о последних рецептах и ингредиентах и т.п.
 """
 
-BUSY = "busy"                                   # Бот занят
-AWAIT_MANUAL = "await_manual"                   # Бот ожидает ручного ввода от пользователя
-SESSION_ITEMS = "session_items"                 # Текущие ингредиенты пользователя (последний введенные)
 APPEND_MODE = "append_mode"                     # Бот ожидает добавление ингредиента после ручного ввода
+AWAIT_MANUAL = "await_manual"                   # Бот ожидает ручного ввода от пользователя
+BUSY = "busy"                                   # Бот занят
+IS_USER = "is_user"                             # Флаг для указания того, что пользователь добавлен в БД
 GOAL_CODE = "goal_code"                         # Цель для рецепта
 LAST_GENERATED_RECIPE = "last_generated_recipe" # Последний сгенерированный рецепт
-
+SESSION_ITEMS = "session_items"                 # Текущие ингредиенты пользователя (последний введенные)
 SELECTED_TIME = "selected_time"
 TIME_OPTIONS = {
     "time_15": "⚡️ До 15 мин",
