@@ -1,8 +1,11 @@
 import logging
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
-from handlers import on_photo
+from handlers.image_handler import on_photo
 from src import storage
 from src.config import BOT_TOKEN
 from src.handlers import on_text, on_callback
