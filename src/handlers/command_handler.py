@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 async def start_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     text = """
-🍳 Добро пожаловать в AI-Chef! 👨‍🍳
+Добро пожаловать в AI-Chef! 👨‍🍳
 
 Я ваш персональный шеф-повар с искусственным интеллектом! 
 

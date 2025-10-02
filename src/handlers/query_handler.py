@@ -84,7 +84,17 @@ async def add_ingredient(query: CallbackQuery | None, context: ContextTypes.DEFA
 
 
 async def goal_recipe(query: CallbackQuery | None):
-    await query.message.edit_text("🎯 Выберите способ ввода продуктов:", reply_markup=goal_submenu())
+    text = (
+        "Добро пожаловать в AI-Chef! 👨‍🍳\n\n"
+        "Я ваш персональный шеф-повар с искусственным интеллектом!\n\n"
+        "✨ Что я умею:\n\n"
+        "• Создавать рецепты из ваших продуктов\n"
+        "• Рассчитывать точное КБЖУ для каждой порции\n"
+        "• Предлагать сезонные рецепты дня\n"
+        "• Помогать достигать ваших целей питания\n\n"
+        "🎯 Выберите способ ввода продуктов:"
+    )
+    await query.message.edit_text(text, reply_markup=goal_submenu())
 
 
 async def upload_photo(query: CallbackQuery | None):
@@ -102,7 +112,7 @@ async def manual_input(query: CallbackQuery | None, context: ContextTypes.DEFAUL
 
     # ВАЖНО: не edit_text (это замещает пречек), а reply_text — пречек останется!
     await query.message.edit_text(
-        "⌨️ Введите продукты через запятую:\n\nПример: курица, рис, лук, морковь",
+        "⌨️ Введите продукты через запятую:\n\nПример: Курица, рис, лук, морковь",
         reply_markup=photoback_submenu(),
     )
 
@@ -342,7 +352,7 @@ async def goal_recipe_choice_with_time(goal_code: str, time_code: str, query: Ca
 
         # добавляем цель и время в запрос к ИИ
         items_with_goal_and_time = [f"Цель: {goal_name}", f"Время готовки: {time_display}"] + items
-        reply = await AI.recipe_with_macros(items_with_goal_and_time)
+        reply = await AI.parse_ingredients(items_with_goal_and_time)
 
         # форматируем результат
         pretty = format_recipe_for_telegram(reply)
