@@ -26,3 +26,8 @@ BACK_TO_GOAL_SELECTION = "back_to_goal_selection"
 def smart_capitalize(s: str) -> str:
     # корректно работает для «красный лук», «миндальное молоко» и т.п.
     return " ".join(w[:1].upper() + w[1:] for w in s.split())
+
+# Хэлпер smart_capitalize (для красивого списка)
+def smart_capitalize(s: str) -> str:
+    s = s.strip()
+    return s[:1].upper() + s[1:] if s else s
