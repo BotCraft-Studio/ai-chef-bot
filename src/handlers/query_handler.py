@@ -13,6 +13,7 @@ from telegram.ext import ContextTypes
 
 import storage
 
+from utils.formatting import format_final_recipe
 from utils.query_utils import smart_capitalize
 from keyboards import main_menu, goal_submenu, after_recipe_menu, profile_menu, premium_menu, textback_submenu, photoback_submenu, time_selection_menu, goal_choice_menu
 from providers.gigachat import GigaChatText
@@ -52,11 +53,9 @@ async def daily_recipe(query: CallbackQuery | None):
     recipe_name = seasonal_recipes[0] if seasonal_recipes else "Сезонный рецепт"
 
     try:
-        # 3) Генерируем рецепт у ИИ
         reply = await AI.parse_ingredients([recipe_name])
-        pretty = format_recipe_for_telegram(reply)
+        pretty = format_final_recipe(reply, "Обычные")   # <-- ВАЖНО: форматируем под «Обычные»
 
-        # 4) Заменяем баннер на готовый рецепт (снова редактируем то же сообщение → вторая анимация)
         await query.message.edit_text(
             f"✨ Рецепт дня!\n\n{pretty}",
             reply_markup=main_menu(),
@@ -64,7 +63,6 @@ async def daily_recipe(query: CallbackQuery | None):
             disable_web_page_preview=True
         )
     except Exception:
-        # лаконичное сообщение об ошибке (тоже редактирование, без спама новыми сообщениями)
         await query.message.edit_text(
             "⚠️ Не удалось сгенерировать рецепт дня. Попробуйте ещё раз чуть позже.",
             parse_mode=ParseMode.HTML
@@ -79,7 +77,7 @@ async def add_ingredient(query: CallbackQuery | None, context: ContextTypes.DEFA
     # Тоже reply_text — пречек остаётся видимым
     await query.message.reply_text(
         "Добавь продукты через запятую, я их ДОБАВЛЮ к текущему списку.\n\n"
-        "Например: сыр, помидоры, оливковое масло"
+        "Например: Cыр, помидоры, оливковое масло"
     )
 
 
@@ -143,7 +141,7 @@ async def goal_recipe_choice(user_input: str, query: CallbackQuery | None, conte
         reply = await AI.parse_ingredients(items_with_goal)
 
         # (в) приводим текст к красивому HTML (как у тебя уже сделано)
-        pretty = format_recipe_for_telegram(reply)
+        pretty = format_final_recipe(reply, goal_name)
 
         # (г) сохраняем для кнопки «Сгенерировать другой»
         context.user_data[GOAL_CODE] = user_input  # например, "goal_pp"
@@ -169,8 +167,6 @@ async def goal_recipe_choice(user_input: str, query: CallbackQuery | None, conte
 
     return None
 
-
-
 async def regenerate_recipe(query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
     last_ingredients = context.user_data.get(LAST_GENERATED_RECIPE)
 
@@ -186,7 +182,12 @@ async def regenerate_recipe(query: CallbackQuery | None, context: ContextTypes.D
 
     try:
         reply = await AI.parse_ingredients(last_ingredients)
-        pretty = format_recipe_for_telegram(reply)
+
+        goal_code = context.user_data.get(GOAL_CODE, "goal_normal")
+        from utils.goal_utils import GOALS
+        goal_name = GOALS.get(goal_code, "Обычные")
+
+        pretty = format_final_recipe(reply, goal_name)
     except Exception as e:
         return await query.message.edit_text(f"Ошибка генерации: {e}", reply_markup=main_menu())
     finally:
@@ -355,7 +356,7 @@ async def goal_recipe_choice_with_time(goal_code: str, time_code: str, query: Ca
         reply = await AI.parse_ingredients(items_with_goal_and_time)
 
         # форматируем результат
-        pretty = format_recipe_for_telegram(reply)
+        pretty = format_final_recipe(reply, goal_name)
 
         # сохраняем для кнопки «Сгенерировать другой»
         context.user_data[GOAL_CODE] = goal_code
@@ -383,32 +384,42 @@ async def goal_recipe_choice_with_time(goal_code: str, time_code: str, query: Ca
     return None
 
 async def handle_goal_selection(goal_code: str, query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает выбор цели и показывает выбор времени"""
-    goal_name = GOALS.get(goal_code, "Обычный домашний рецепт")
-    context.user_data[GOAL_CODE] = goal_code  # Сохраняем выбранную цель
+    """Обрабатывает выбор цели и показывает меню времени"""
+    # 1) Сохраняем выбранную цель в user_data
+    context.user_data[GOAL_CODE] = goal_code
 
+    # 2) Человекочитаемое имя цели
+    goal_name = GOALS.get(goal_code, "Обычные")
+
+    # 3) Забираем продукты из сессии (их туда положил ваш пречек после ввода/фото)
     items = context.user_data.get(SESSION_ITEMS, [])
+    if not items:
+        # если вдруг пусто — подскажем пользователю
+        return await query.message.edit_text(
+            "Не вижу ваших продуктов. Введите список или отправьте фото.",
+        )
+
+    # 4) Красивый список (первые 5 пунктов + счётчик)
     items_text = "\n".join([f"• {smart_capitalize(item)}" for item in items[:5]])
     if len(items) > 5:
-        items_text += f"\n• ... и ещё {len(items) - 5} продуктов"
+        items_text += f"\n• ... и ещё {len(items) - 5} продукт(а/ов)"
 
-    # ДОБАВЛЯЕМ ЭМОДЗИ ДЛЯ КАЖДОЙ ЦЕЛИ
+    # 5) Эмодзи под цель (для UI)
     goal_emojis = {
-        "goal_lose": "💪",  # Похудеть
-        "goal_pp": "🥑",  # ПП
-        "goal_fast": "⚡️",  # Быстро
-        "goal_normal": "🍲",  # Обычные
-        "goal_vegan": "🥦",  # Веган
-        "goal_keto": "🥚"  # Кето-питание
+        "goal_lose": "💪",
+        "goal_pp": "🥑",
+        "goal_fast": "⚡️",
+        "goal_normal": "🍲",
+        "goal_vegan": "🥦",
+        "goal_keto": "🥚",
     }
-
     goal_emoji = goal_emojis.get(goal_code, "🎯")
 
-    # ⬇️⬇️⬇️ ВОТ ЗДЕСЬ ИСПРАВЛЕНИЕ - ДОБАВЛЯЕМ {goal_name} ⬇️⬇️⬇️
+    # 6) Переходим к выбору времени
     await query.message.edit_text(
         f"🍳 <b>Ваши продукты</b> ({len(items)} шт.):\n\n"
         f"{items_text}\n\n"
-        f"{goal_emoji} <b>Цель питания:</b> {goal_name}\n\n"  # ← ТЕПЕРЬ ЗДЕСЬ БУДЕТ "Похудеть", "ПП" и т.д.
+        f"{goal_emoji} <b>Цель питания:</b> {goal_name}\n\n"
         f"⏰ <b>Выберите время готовки:</b>",
         reply_markup=time_selection_menu(),
         parse_mode=ParseMode.HTML
