@@ -18,7 +18,11 @@ from utils.query_utils import (
     MY_INGREDIENTS,
     REGENERATE_RECIPE,
     SAVE_RECIPE,
-    UPLOAD_PHOTO, BACK_TO_GOAL_SELECTION
+    UPLOAD_PHOTO,
+    BACK_TO_GOAL_SELECTION,
+    MY_RECIPES,
+    SHARE_RECIPE,
+    CHANGE_PRODUCTS
 )
 
 
@@ -53,11 +57,23 @@ def profile_menu():
     ])
 
 
-def after_recipe_menu():
+def after_recipe_menu(share_url=None):
+    first_row = [
+        InlineKeyboardButton("🔁 Другой вариант", callback_data=REGENERATE_RECIPE),
+        InlineKeyboardButton("❤️ В избранное", callback_data=SAVE_RECIPE)
+    ]
+    second_row = [
+        InlineKeyboardButton("📖 Мои рецепты", callback_data=MY_RECIPES),
+        InlineKeyboardButton("📤 Поделиться", url=share_url) if share_url else None,
+    ] if share_url is not None else [
+        InlineKeyboardButton("📖 Мои рецепты", callback_data=MY_RECIPES)
+    ]
+    third_row = [
+        InlineKeyboardButton("🍎 Новый список продуктов", callback_data=CHANGE_PRODUCTS),
+    ]
+
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔁 Сгенерировать другой", callback_data=REGENERATE_RECIPE)],
-        [InlineKeyboardButton("💾 Сохранить рецепт", callback_data=SAVE_RECIPE)],
-        [InlineKeyboardButton("🔙 В меню", callback_data=MAIN_MENU)],
+        first_row,second_row,third_row
     ])
 
 
@@ -68,23 +84,25 @@ def goal_choice_menu():
             InlineKeyboardButton("💪 Похудеть", callback_data=GOAL_LOSE),
             InlineKeyboardButton("🥑 ПП", callback_data=GOAL_PP)],
 
-        [  # Первый ряд
+        [  # Второй ряд
             InlineKeyboardButton("⏱ Быстро", callback_data=GOAL_FAST),
             InlineKeyboardButton("🍲 Обычные", callback_data=GOAL_NORMAL)],
 
-        [  # Первый ряд
+        [  # Третий ряд
             InlineKeyboardButton("🥦 Веган", callback_data=GOAL_VEGAN),
             InlineKeyboardButton("🥚 Кето-питание", callback_data=GOAL_KETO)],
 
-        # Первый ряд
+        # Четвертый ряд
         [InlineKeyboardButton("➕ Добавить продукты", callback_data=ADD_INGREDIENT)],
     ])
+
 
 def photoback_submenu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📷 Загрузить фото продуктов", callback_data=UPLOAD_PHOTO)],
-        [InlineKeyboardButton("🔙 Назад", callback_data=GOAL_RECIPE)],
+        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_recipe")],
     ])
+
 
 def textback_submenu():
     return InlineKeyboardMarkup([

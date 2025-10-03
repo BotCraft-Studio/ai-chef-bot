@@ -21,6 +21,9 @@ REGENERATE_RECIPE = "regenerate_recipe" # Сгенерировать получ�
 SAVE_RECIPE = "save_recipe"             # Сохранить рецепт
 UPLOAD_PHOTO = "upload_photo"           # Загрузить фото/картинку с ингредиентами
 BACK_TO_GOAL_SELECTION = "back_to_goal_selection"
+MY_RECIPES = "my_recipes"               # Мои сохраненные рецепты
+SHARE_RECIPE = "share_recipe"           # Поделиться рецептом
+CHANGE_PRODUCTS = "change_products"     # Изменить продукты
 
 # Красивое приведение к Заглавной Каждого Слова
 def smart_capitalize(s: str) -> str:
