@@ -114,7 +114,9 @@ class GigaChatText(GigaChatClient):
         "Кето-питание": "Углеводы <10% калорий, жиры высокие, без сахара/крахмалистых."
     }
 
-    async def parse_ingredients(self, ingredients: list[str]) -> str:
+    async def parse_ingredients(self, ingredients: list[str],
+                                is_regenerate: Optional[bool] = False,
+                                prev_recipe_name: str = None) -> str:
         # 1) Достаём служебные строки
         goal_line = next((x for x in ingredients if x.startswith("Цель:")), None)
         time_line = next((x for x in ingredients if x.startswith("Время готовки:")), None)
@@ -154,8 +156,16 @@ class GigaChatText(GigaChatClient):
             "4) ⏱ Итого время: <число> минут\n"
             "5) КБЖУ на порцию: Калории, Белки, Жиры, Углеводы (оценочно)\n"
             "6) 🎯 Соответствие цели: 1–2 предложения (почему рецепт подходит цели)\n"
-            "7) Советы/замены: 2–4 пункта\n"
+            "7) Советы/замены: 2–4 пункта"
         )
+
+        if is_regenerate:
+            user_prompt += f"""
+ВАЖНО: Создай совершенно другой рецепт, не похожий на {prev_recipe_name}, но из тех же продуктов: 
+1) Используй другой тип блюда (если был суп - сделай второе, и наоборот);
+2) Примени другие техники приготовления;
+3) Предложи альтернативную кухню или стиль;
+4) Сделай рецепт максимально отличным от обычного подхода"""
 
         payload = {
             "model": GIGACHAT_TEXT_MODEL,
@@ -170,7 +180,7 @@ class GigaChatText(GigaChatClient):
 
         js = await self._post_json("/chat/completions", payload)
         return (js.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
-        
+
 class GigaChatVision(GigaChatClient):
     async def parse_ingredients(self, image_bytes: bytes) -> list[str]:
         up = await self._upload_file(image_bytes, filename="photo.jpg")
