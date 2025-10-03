@@ -22,11 +22,6 @@ SAVE_RECIPE = "save_recipe"             # Сохранить рецепт
 UPLOAD_PHOTO = "upload_photo"           # Загрузить фото/картинку с ингредиентами
 BACK_TO_GOAL_SELECTION = "back_to_goal_selection"
 
-# Красивое приведение к Заглавной Каждого Слова
-def smart_capitalize(s: str) -> str:
-    # корректно работает для «красный лук», «миндальное молоко» и т.п.
-    return " ".join(w[:1].upper() + w[1:] for w in s.split())
-
 # Хэлпер smart_capitalize (для красивого списка)
 def smart_capitalize(s: str) -> str:
     s = s.strip()
