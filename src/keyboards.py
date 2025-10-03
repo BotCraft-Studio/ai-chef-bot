@@ -3,8 +3,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from utils.query_utils import (
     ADD_INGREDIENT,
     BUY_PRO,
-    CHANGE_GOAL,
-    CLEAR_INGREDIENTS,
     DAILY_RECIPE,
     GOAL_FAST,
     GOAL_KETO,
@@ -15,10 +13,14 @@ from utils.query_utils import (
     GOAL_VEGAN,
     MAIN_MENU,
     MANUAL_INPUT,
-    MY_INGREDIENTS,
     REGENERATE_RECIPE,
     SAVE_RECIPE,
-    UPLOAD_PHOTO, BACK_TO_GOAL_SELECTION
+    UPLOAD_PHOTO, 
+    BACK_TO_GOAL_SELECTION,
+    MY_SUBSCRIBE,
+    DAILY_RECIPE,
+    MY_RECIPES,
+    BACK_TO_PROFILE
 )
 
 
@@ -33,33 +35,47 @@ def goal_submenu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📷 Загрузить фото продуктов", callback_data=UPLOAD_PHOTO)],
         [InlineKeyboardButton("⌨️ Ввести продукты вручную", callback_data=MANUAL_INPUT)],
-        [InlineKeyboardButton("🔙 Назад", callback_data=MAIN_MENU)],
+        [InlineKeyboardButton("⬅️ Назад", callback_data=MAIN_MENU)],
     ])
 
 
 def premium_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("💳 Купить PRO", callback_data=BUY_PRO)],
-        [InlineKeyboardButton("🔙 Назад", callback_data=MAIN_MENU)],
+        [InlineKeyboardButton("💳 Улучшить до PRO", callback_data=BUY_PRO)],
+        [InlineKeyboardButton("⬅️ Назад", callback_data=MY_SUBSCRIBE)],
     ])
 
 
+def subscription_menu_lite():
+    rows = [
+        [InlineKeyboardButton("✨ Перейти на PRO за 1₽", callback_data=BUY_PRO)],
+        [InlineKeyboardButton("⬅️ Назад к профилю", callback_data=BACK_TO_PROFILE)],
+    ]
+    return InlineKeyboardMarkup(rows)
+
+def subscription_menu_pro():
+    rows = [
+        [InlineKeyboardButton("⬅️ Назад к профилю", callback_data=BACK_TO_PROFILE)],
+    ]
+    return InlineKeyboardMarkup(rows)
+
 def profile_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🎯 Изменить цель", callback_data=CHANGE_GOAL)],
-        [InlineKeyboardButton("🍳 Мои продукты", callback_data=MY_INGREDIENTS)],
-        [InlineKeyboardButton("🗑 Очистить продукты", callback_data=CLEAR_INGREDIENTS)],
-        [InlineKeyboardButton("🔙 Назад", callback_data=MAIN_MENU)],
+        [   # Первый ряд
+            InlineKeyboardButton("❤️ Мои рецепты", callback_data=MY_RECIPES),
+            InlineKeyboardButton("🧾 Моя подписка",    callback_data=MY_SUBSCRIBE),
+        ],
+            # Второй ряд
+        [   InlineKeyboardButton("⬅️ В меню", callback_data=MAIN_MENU)],
     ])
 
 
 def after_recipe_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🔁 Сгенерировать другой", callback_data=REGENERATE_RECIPE)],
-        [InlineKeyboardButton("💾 Сохранить рецепт", callback_data=SAVE_RECIPE)],
-        [InlineKeyboardButton("🔙 В меню", callback_data=MAIN_MENU)],
+        [InlineKeyboardButton("❤️ Сохранить рецепт", callback_data=SAVE_RECIPE)],
+        [InlineKeyboardButton("⬅️ В меню", callback_data=MAIN_MENU)],
     ])
-
 
 # NEW: меню выбора цели
 def goal_choice_menu():
@@ -83,13 +99,13 @@ def goal_choice_menu():
 def photoback_submenu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📷 Загрузить фото продуктов", callback_data=UPLOAD_PHOTO)],
-        [InlineKeyboardButton("🔙 Назад", callback_data=GOAL_RECIPE)],
+        [InlineKeyboardButton("⬅️ Назад", callback_data=GOAL_RECIPE)],
     ])
 
 def textback_submenu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("⌨️ Ввести продукты вручную", callback_data=MANUAL_INPUT)],
-        [InlineKeyboardButton("🔙 Назад", callback_data=GOAL_RECIPE)],
+        [InlineKeyboardButton("⬅️ Назад", callback_data=GOAL_RECIPE)],
     ])
 
 

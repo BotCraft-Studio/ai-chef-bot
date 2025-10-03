@@ -14,11 +14,12 @@ from telegram.ext import ContextTypes
 import storage
 
 from utils.formatting import format_final_recipe
-from utils.query_utils import smart_capitalize
-from keyboards import main_menu, goal_submenu, after_recipe_menu, profile_menu, premium_menu, textback_submenu, photoback_submenu, time_selection_menu, goal_choice_menu
+from utils.query_utils import smart_capitalize, MY_RECIPES, MY_SUBSCRIBE, MAIN_MENU
+from keyboards import main_menu, goal_submenu, after_recipe_menu, profile_menu, premium_menu, textback_submenu, photoback_submenu, time_selection_menu, goal_choice_menu, subscription_menu_pro, subscription_menu_lite
 from providers.gigachat import GigaChatText
 from utils.bot_utils import APPEND_MODE, SESSION_ITEMS, AWAIT_MANUAL, BUSY, GOAL_CODE, LAST_GENERATED_RECIPE, SELECTED_TIME, TIME_OPTIONS
 from utils.goal_utils import GOALS
+from utils import query_utils
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -94,13 +95,11 @@ async def goal_recipe(query: CallbackQuery | None):
     )
     await query.message.edit_text(text, reply_markup=goal_submenu())
 
-
 async def upload_photo(query: CallbackQuery | None):
     await query.message.edit_text(
         "📷 Отправьте фото продуктов\n\nСовет: сфотографируйте продукты на светлом фоне для лучшего распознавания",
         reply_markup=textback_submenu(),
     )
-
 
 async def manual_input(query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
     # чистый лист в СЕССИИ
@@ -113,7 +112,6 @@ async def manual_input(query: CallbackQuery | None, context: ContextTypes.DEFAUL
         "⌨️ Введите продукты через запятую:\n\nПример: Курица, рис, лук, морковь",
         reply_markup=photoback_submenu(),
     )
-
 
 async def goal_recipe_choice(user_input: str, query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
     # 1) продукты берём из того, что пользователь только что ввёл
@@ -253,13 +251,30 @@ async def clear_ingredients(user_id: int, query: CallbackQuery | None):
 async def back_to_main_menu(query: CallbackQuery | None):
     await query.message.edit_text("Выберите опцию:", reply_markup=main_menu())
 
-
 async def buy_pro(query: CallbackQuery | None):
+    text = (
+        "⚡️ <b>ПРЕИМУЩЕСТВА PRO подписки</b>:\n\n"
+        "🍽 <b>1. Все режимы питания без ограничений</b>\n"
+        "⤷ Хочешь похудеть, сидишь на кето-диете или просто мало времени? — выбирай нужную категорию, а я подстроюсь.\n\n"
+        "📜 <b>2. Генерируй рецепты без лимита</b>\n"
+        "⤷ Забудь про ограничение 1 рецепт в день. Генерируй сколько хочешь — хоть 50 штук за раз!\n\n"
+        "❤️ <b>3. Сохраняй до 20 любимых рецептов</b>\n"
+        "⤷ Понравилось блюдо? Сохрани! В премиуме — в 4 раза больше места в избранном.\n\n"
+        "🥦 <b>4. Анализ КБЖУ по каждому рецепту</b>\n"
+        "⤷ Устал считать самостоятельно? Сделаю это за тебя!\n\n"
+        "🚀 <b>5. Скорость вне очереди</b>\n"
+        "⤷ Когда я перегружен, ты получаешь приоритетный ответ первым.\n\n"
+        "🔥 <b>Стоимость:</b> 1 ₽ за 3 дня — дальше 349 ₽/мес\n"
+        "Меньше, чем за чашку кофе ☕️ — и ты больше никогда не будешь думать, что приготовить.\n\n"
+        "❌ Отменить подписку можно в любой момент в личном кабинете.\n\n"
+        "Для оплаты свяжитесь с @администратор"
+    )
+
     await query.message.edit_text(
-        "💳 <b>Оформление PRO подписки</b>\n\n"
-        "Для оплаты свяжитесь с @администратор",
+        text,
         reply_markup=premium_menu(),
-        parse_mode='HTML'
+        parse_mode="HTML",
+        disable_web_page_preview=True
     )
 
 
@@ -450,3 +465,115 @@ async def back_to_goal_selection(query: CallbackQuery, context: ContextTypes.DEF
         reply_markup=goal_choice_menu(),
         parse_mode=ParseMode.HTML
     )
+
+# --- ПРОФИЛЬ: Мои рецепты ---
+async def profile_my_recipes(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+
+    user_id = query.from_user.id
+    try:
+        recipes = storage.list_saved_recipes(user_id) 
+    except Exception:
+        recipes = []
+
+    if not recipes:
+        txt = (
+            "📖 <b>Мои рецепты</b>\n\n"
+            "Пока пусто. Сохраняйте понравившиеся рецепты кнопкой «❤️ В избранное»."
+        )
+        return await query.message.edit_text(
+            txt, parse_mode=ParseMode.HTML, reply_markup=subscription_menu_pro()
+        )
+
+    lines = []
+    for i, r in enumerate(recipes[:5], start=1):
+        title = r.get("title") or f"Рецепт #{i}"
+        lines.append(f"{i}. {title}")
+
+    txt = "📖 <b>Мои рецепты</b>\n\n" + "\n".join(lines)
+    await query.message.edit_text(
+        txt, parse_mode=ParseMode.HTML, reply_markup=subscription_menu_pro()
+    )
+
+# --- ПРОФИЛЬ: Подписка ---
+async def profile_subscribe(query: CallbackQuery):
+
+    user_id = query.from_user.id
+    try:
+        is_pro = storage.user_is_pro(user_id)
+    except Exception:
+        is_pro = False
+
+    if is_pro:
+        txt = (
+            "🧾 <b>Моя подписка</b>\n\n"
+            "Статус: Активна ✅\n"
+            "Активна до: <b>дд.мм.гггг</b>\n"
+            
+            
+            "Преимущества PRO: больше токенов, приоритет, премиум-рецепты."
+        )
+        kb = subscription_menu_pro()   # только «Назад»
+    else:
+        txt = (
+            "🧾 <b>Моя подписка</b>\n\n"
+            "Статус: <b>Lite</b>\n"
+            "Ограничения: 2 рецепта в день.\n\n"
+            "Повысьте до PRO, чтобы получить больше лимитов и функций."
+        )
+        kb = subscription_menu_lite()  # «Улучшить до PRO» + «Назад»
+
+    await query.message.edit_text(txt, parse_mode=ParseMode.HTML, reply_markup=kb)
+
+async def back_to_profile(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    user_id = query.from_user.id
+    text, markup, pm = await build_profile_view(context, user_id)
+    await query.message.edit_text(text, reply_markup=markup, parse_mode=pm)
+
+# Нажатие «Улучшить до PRO»
+async def subscribe_upgrade(query: CallbackQuery):
+    from telegram.constants import ParseMode
+    from keyboards import subscription_menu_lite
+    txt = (
+        "💳 <b>Улучшение до PRO</b>\n\n"
+        "Для оформления PRO свяжитесь с администратором: @admin\n"
+        "Скоро добавим оплату прямо в боте."
+    )
+    await query.message.edit_text(txt, parse_mode=ParseMode.HTML, reply_markup=subscription_menu_lite())
+
+async def build_profile_view(context, user_id: int):
+    # 1) Статус
+    try:
+        is_pro = storage.user_is_pro(user_id)
+    except Exception:
+        is_pro = False
+    status = "PRO" if is_pro else "Lite"
+
+    # 2) Счётчики
+    try:
+        recipes_total = storage.count_recipes(user_id)
+    except Exception:
+        recipes_total = 0
+    try:
+        favorites_total = storage.count_favorites(user_id)
+    except Exception:
+        favorites_total = 0
+
+    # 3) Последние продукты (сначала из сессии, если есть)
+    items = context.user_data.get("SESSION_ITEMS") or []
+    if not items:
+        try:
+            rows = storage.list_ingredients(user_id) or []
+            items = [name for _, name, _ in rows[:5]]
+        except Exception:
+            items = []
+    last_items_txt = "\n".join(f"• {x}" for x in items[:5]) if items else "—"
+
+    # 4) Текст + клавиатура
+    text = (
+        "👤 <b>Мой профиль</b>\n\n"
+        f"Статус: <b>{status}</b>\n"
+        f"Сгенерировано рецептов: <b>{recipes_total}</b>\n"
+        f"В избранном: <b>{favorites_total}</b>\n\n"
+        f"<b>Последние продукты:</b>\n{last_items_txt}"
+    )
+    return text, profile_menu(), ParseMode.HTML

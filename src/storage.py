@@ -127,6 +127,9 @@ def list_saved_recipes(user_id: int):
         return []
     return data["users"][uid]["saved_recipes"]
 
+def user_is_pro(user_id: int) -> bool:
+    return False
+
 
 def get_last_ingredients(user_id: int):
     data = _read()

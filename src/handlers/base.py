@@ -17,8 +17,16 @@ from handlers.query_handler import (
     my_ingredients,
     regenerate_recipe,
     save_recipe,
-    upload_photo, back_to_goal_selection, handle_time_selection, handle_goal_selection
+    upload_photo, 
+    back_to_goal_selection, 
+    handle_time_selection, 
+    handle_goal_selection,
+    profile_my_recipes,
+    profile_subscribe,
+    back_to_profile,
+    subscribe_upgrade,
 )
+
 from handlers.query_handler import goal_recipe_choice_with_time
 from src.keyboards import goal_choice_menu, time_selection_menu
 from utils import query_utils
@@ -97,12 +105,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await my_ingredients(query)
         case query_utils.MAIN_MENU:
             await back_to_main_menu(query)
+
+        # Вроде как не используется, не нашел в боте
         case query_utils.BUY_PRO:
             await buy_pro(query)
-        case query_utils.CHANGE_GOAL:
-            await change_goal(query)
-        case query_utils.CLEAR_INGREDIENTS:
-            await clear_ingredients(user_id, query)
+
         case query_utils.DAILY_RECIPE:
             await daily_recipe(query)
         case query_utils.GOAL_RECIPE:
@@ -115,10 +122,17 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await save_recipe(user_id, query, context)
         case query_utils.UPLOAD_PHOTO:
             await upload_photo(query)
-        case query_utils.BACK_TO_GOAL_SELECTION:  # ← ДОБАВЬТЕ ЭТОТ СЛУЧАЙ
+        case query_utils.BACK_TO_GOAL_SELECTION:
             # Возврат к выбору цели
             await back_to_goal_selection(query, context)
-
+        case query_utils.MY_RECIPES:
+            await profile_my_recipes(query, context)
+        case query_utils.MY_SUBSCRIBE:
+            await profile_subscribe(query)
+        case query_utils.BACK_TO_PROFILE:
+            await back_to_profile(query, context)
+        case query_utils.BUY_PRO:
+            await subscribe_upgrade(query)
         case user_input if user_input in TIME_OPTIONS:
             # Обработка выбора времени
             await handle_time_selection(user_input, query, context)
