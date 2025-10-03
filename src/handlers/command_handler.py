@@ -6,9 +6,12 @@ import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes
+from telegram.constants import ParseMode
+
+from handlers.query_handler import (build_profile_view)
 
 import storage
-from keyboards import premium_menu, profile_menu, main_menu
+from keyboards import premium_menu, main_menu
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -111,22 +114,15 @@ async def premium_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
 
-
-async def profile_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+async def profile_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    ingredients = storage.list_ingredients(user_id)
-    ingredients_count = len(ingredients)
-    last_three = ', '.join([name for _, name, _ in ingredients[:3]]) if ingredients else 'нет'
+    text, markup, pm = await build_profile_view(context, user_id)
     await update.message.reply_text(
-        f"👤 <b>Ваш профиль</b>\n\n"
-        f"📊 Статистика:\n"
-        f"• Сохранено продуктов: {ingredients_count}\n"
-        f"• Последние добавления: {last_three}\n\n"
-        f"Выберите действие:",
-        reply_markup=profile_menu(),
-        parse_mode='HTML'
+        text,
+        reply_markup=markup,
+        parse_mode=pm,
+        disable_web_page_preview=True,
     )
-
 
 async def privacy_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     privacy_text = """

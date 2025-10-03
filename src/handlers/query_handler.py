@@ -7,19 +7,19 @@ import html
 import logging
 import re
 
-from telegram import Update, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram._utils.defaultvalue import DEFAULT_TRUE
+from telegram import Update, CallbackQuery
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 import storage
 
-from utils.query_utils import smart_capitalize
-from keyboards import main_menu, goal_submenu, after_recipe_menu, profile_menu, premium_menu, textback_submenu, photoback_submenu, time_selection_menu, goal_choice_menu
+from utils.formatting import format_final_recipe
+from utils.query_utils import smart_capitalize, MY_RECIPES, MY_SUBSCRIBE, MAIN_MENU
+from keyboards import main_menu, goal_submenu, after_recipe_menu, profile_menu, premium_menu, textback_submenu, photoback_submenu, time_selection_menu, goal_choice_menu, subscription_menu_pro, subscription_menu_lite
 from providers.gigachat import GigaChatText
 from utils.bot_utils import APPEND_MODE, SESSION_ITEMS, AWAIT_MANUAL, BUSY, GOAL_CODE, LAST_GENERATED_RECIPE, SELECTED_TIME, TIME_OPTIONS
 from utils.goal_utils import GOALS
-from utils.query_utils import MY_RECIPES, SHARE_RECIPE, CHANGE_PRODUCTS
+from utils import query_utils
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -54,19 +54,16 @@ async def daily_recipe(query: CallbackQuery | None):
     recipe_name = seasonal_recipes[0] if seasonal_recipes else "Сезонный рецепт"
 
     try:
-        # 3) Генерируем рецепт у ИИ
         reply = await AI.parse_ingredients([recipe_name])
-        pretty = format_recipe_for_telegram(reply)
+        pretty = format_final_recipe(reply, "Обычные")   # <-- ВАЖНО: форматируем под «Обычные»
 
-        # 4) Заменяем баннер на готовый рецепт (снова редактируем то же сообщение → вторая анимация)
         await query.message.edit_text(
             f"✨ Рецепт дня!\n\n{pretty}",
-            reply_markup=after_recipe_menu(share_url=None),
+            reply_markup=main_menu(),
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True
         )
     except Exception:
-        # лаконичное сообщение об ошибке (тоже редактирование, без спама новыми сообщениями)
         await query.message.edit_text(
             "⚠️ Не удалось сгенерировать рецепт дня. Попробуйте ещё раз чуть позже.",
             parse_mode=ParseMode.HTML
@@ -81,20 +78,28 @@ async def add_ingredient(query: CallbackQuery | None, context: ContextTypes.DEFA
     # Тоже reply_text — пречек остаётся видимым
     await query.message.reply_text(
         "Добавь продукты через запятую, я их ДОБАВЛЮ к текущему списку.\n\n"
-        "Например: сыр, помидоры, оливковое масло"
+        "Например: Cыр, помидоры, оливковое масло"
     )
 
 
 async def goal_recipe(query: CallbackQuery | None):
-    await query.message.edit_text("🎯 Выберите способ ввода продуктов:", reply_markup=goal_submenu())
-
+    text = (
+        "Добро пожаловать в AI-Chef! 👨‍🍳\n\n"
+        "Я ваш персональный шеф-повар с искусственным интеллектом!\n\n"
+        "✨ Что я умею:\n\n"
+        "• Создавать рецепты из ваших продуктов\n"
+        "• Рассчитывать точное КБЖУ для каждой порции\n"
+        "• Предлагать сезонные рецепты дня\n"
+        "• Помогать достигать ваших целей питания\n\n"
+        "🎯 Выберите способ ввода продуктов:"
+    )
+    await query.message.edit_text(text, reply_markup=goal_submenu())
 
 async def upload_photo(query: CallbackQuery | None):
     await query.message.edit_text(
         "📷 Отправьте фото продуктов\n\nСовет: сфотографируйте продукты на светлом фоне для лучшего распознавания",
         reply_markup=textback_submenu(),
     )
-
 
 async def manual_input(query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
     # чистый лист в СЕССИИ
@@ -104,10 +109,9 @@ async def manual_input(query: CallbackQuery | None, context: ContextTypes.DEFAUL
 
     # ВАЖНО: не edit_text (это замещает пречек), а reply_text — пречек останется!
     await query.message.edit_text(
-        "⌨️ Введите продукты через запятую:\n\nПример: курица, рис, лук, морковь",
+        "⌨️ Введите продукты через запятую:\n\nПример: Курица, рис, лук, морковь",
         reply_markup=photoback_submenu(),
     )
-
 
 async def goal_recipe_choice(user_input: str, query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
     # 1) продукты берём из того, что пользователь только что ввёл
@@ -135,7 +139,7 @@ async def goal_recipe_choice(user_input: str, query: CallbackQuery | None, conte
         reply = await AI.parse_ingredients(items_with_goal)
 
         # (в) приводим текст к красивому HTML (как у тебя уже сделано)
-        pretty = format_recipe_for_telegram(reply)
+        pretty = format_final_recipe(reply, goal_name)
 
         # (г) сохраняем для кнопки «Сгенерировать другой»
         context.user_data[GOAL_CODE] = user_input  # например, "goal_pp"
@@ -148,7 +152,7 @@ async def goal_recipe_choice(user_input: str, query: CallbackQuery | None, conte
         # (д) заменяем баннер на готовый рецепт (ещё одна красивая анимация)
         await query.message.edit_text(
             pretty,
-            reply_markup=after_recipe_menu(share_url=None),
+            reply_markup=after_recipe_menu(),
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True
         )
@@ -162,10 +166,9 @@ async def goal_recipe_choice(user_input: str, query: CallbackQuery | None, conte
     return None
 
 async def regenerate_recipe(query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
-    """Генерирует новый рецепт с сильным запросом на разнообразие"""
-    last_recipe_data = context.user_data.get(LAST_GENERATED_RECIPE)
+    last_ingredients = context.user_data.get(LAST_GENERATED_RECIPE)
 
-    if not last_recipe_data:
+    if not last_ingredients:
         return await query.message.edit_text(
             "Нет последнего списка ингредиентов. Сначала введите продукты.",
             reply_markup=main_menu()
@@ -173,66 +176,33 @@ async def regenerate_recipe(query: CallbackQuery | None, context: ContextTypes.D
 
     if context.user_data.get(BUSY):
         return await query.message.reply_text("⏳ Я уже генерирую рецепт — подождите немного.")
-
     context.user_data[BUSY] = True
 
     try:
-        await query.message.edit_text(
-            ai_progress_text(subtitle="Создаю совершенно новый вариант"),
-            parse_mode=ParseMode.HTML
-        )
+        reply = await AI.parse_ingredients(last_ingredients)
 
-        ingredients = last_recipe_data.get("ingredients", [])
         goal_code = context.user_data.get(GOAL_CODE, "goal_normal")
-        time_code = context.user_data.get(SELECTED_TIME, "time_any")
+        from utils.goal_utils import GOALS
+        goal_name = GOALS.get(goal_code, "Обычные")
 
-        goal_name = GOALS.get(goal_code, "Обычный домашний рецепт")
-        time_display = TIME_OPTIONS.get(time_code, "Не важно")
-
-        # Сильный запрос на разнообразие
-        items_with_variation = [
-            f"Цель: {goal_name}",
-            f"Время готовки: {time_display}",
-            "ВАЖНО: Создай совершенно другой рецепт, не похожий на предыдущий",
-            "Используй другой тип блюда (если был суп - сделай второе, и наоборот)",
-            "Примени другие техники приготовления",
-            "Измени основные сочетания ингредиентов",
-            "Предложи альтернативную кухню или стиль",
-            "Сделай рецепт максимально отличным от обычного подхода"
-        ] + ingredients
-
-        reply = await AI.parse_ingredients(items_with_variation)
-        pretty = format_recipe_for_telegram(reply)
-
-        # Обновляем последний рецепт
-        context.user_data[LAST_GENERATED_RECIPE] = {
-            "text": reply,
-            "ingredients": ingredients,
-            "title": ingredients[0] if ingredients else "Рецепт"
-        }
-
-        # Создаем ссылку для шаринга
-        recipe_preview = reply[:2000] + "..." if len(reply) > 2000 else reply
-        share_text = f"🍳 {ingredients[0] if ingredients else 'Рецепт'}\n\n{recipe_preview}\n\n✨ Рецепт от @Cook_Br1o_bot"
-        import urllib.parse
-        encoded_text = urllib.parse.quote(share_text)
-        share_url = f"https://t.me/share/url?url=https://t.me/Cook_Br1o_bot&text={encoded_text}"
-
-        await query.message.edit_text(
-            pretty,
-            reply_markup=after_recipe_menu(share_url=share_url),
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True
-        )
-
+        pretty = format_final_recipe(reply, goal_name)
     except Exception as e:
-        logger.error(f"Ошибка при регенерации рецепта: {e}")
-        await query.message.edit_text(
-            "⚠️ Не удалось сгенерировать новый рецепт. Попробуйте позже.",
-            reply_markup=after_recipe_menu(share_url=None)
-        )
+        return await query.message.edit_text(f"Ошибка генерации: {e}", reply_markup=main_menu())
     finally:
         context.user_data[BUSY] = False
+
+    context.user_data[LAST_GENERATED_RECIPE] = {
+        "text": pretty,
+        "ingredients": last_ingredients,
+        "title": last_ingredients[0] if last_ingredients else "Рецепт"
+    }
+
+    await query.message.edit_text(
+        reply,
+        reply_markup=after_recipe_menu(),
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True
+    )
 
     return None
 
@@ -250,7 +220,7 @@ async def save_recipe(user_id: int, query: CallbackQuery | None, context: Contex
                                  last_generated_recipe.get("title", "Рецепт"),
                                  last_generated_recipe["text"],
                                  last_generated_recipe["ingredients"])
-    await query.message.reply_text("✅ Рецепт сохранён в вашем списке.", reply_markup=after_recipe_menu(share_url=None))
+    await query.message.reply_text("✅ Рецепт сохранён в вашем списке.", reply_markup=profile_menu())
 
     return None
 
@@ -281,13 +251,30 @@ async def clear_ingredients(user_id: int, query: CallbackQuery | None):
 async def back_to_main_menu(query: CallbackQuery | None):
     await query.message.edit_text("Выберите опцию:", reply_markup=main_menu())
 
-
 async def buy_pro(query: CallbackQuery | None):
+    text = (
+        "⚡️ <b>ПРЕИМУЩЕСТВА PRO подписки</b>:\n\n"
+        "🍽 <b>1. Все режимы питания без ограничений</b>\n"
+        "⤷ Хочешь похудеть, сидишь на кето-диете или просто мало времени? — выбирай нужную категорию, а я подстроюсь.\n\n"
+        "📜 <b>2. Генерируй рецепты без лимита</b>\n"
+        "⤷ Забудь про ограничение 1 рецепт в день. Генерируй сколько хочешь — хоть 50 штук за раз!\n\n"
+        "❤️ <b>3. Сохраняй до 20 любимых рецептов</b>\n"
+        "⤷ Понравилось блюдо? Сохрани! В премиуме — в 4 раза больше места в избранном.\n\n"
+        "🥦 <b>4. Анализ КБЖУ по каждому рецепту</b>\n"
+        "⤷ Устал считать самостоятельно? Сделаю это за тебя!\n\n"
+        "🚀 <b>5. Скорость вне очереди</b>\n"
+        "⤷ Когда я перегружен, ты получаешь приоритетный ответ первым.\n\n"
+        "🔥 <b>Стоимость:</b> 1 ₽ за 3 дня — дальше 349 ₽/мес\n"
+        "Меньше, чем за чашку кофе ☕️ — и ты больше никогда не будешь думать, что приготовить.\n\n"
+        "❌ Отменить подписку можно в любой момент в личном кабинете.\n\n"
+        "Для оплаты свяжитесь с @администратор"
+    )
+
     await query.message.edit_text(
-        "💳 <b>Оформление PRO подписки</b>\n\n"
-        "Для оплата свяжитесь с @администратор",
+        text,
         reply_markup=premium_menu(),
-        parse_mode='HTML'
+        parse_mode="HTML",
+        disable_web_page_preview=True
     )
 
 
@@ -358,7 +345,6 @@ async def show_time_selection_after_text(update: Update, context: ContextTypes.D
         reply_markup=time_selection_menu(),
         parse_mode=ParseMode.HTML
     )
-
 async def goal_recipe_choice_with_time(goal_code: str, time_code: str, query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
     """Генерирует рецепт с учётом цели и времени"""
     items = context.user_data.get(SESSION_ITEMS, [])
@@ -385,7 +371,7 @@ async def goal_recipe_choice_with_time(goal_code: str, time_code: str, query: Ca
         reply = await AI.parse_ingredients(items_with_goal_and_time)
 
         # форматируем результат
-        pretty = format_recipe_for_telegram(reply)
+        pretty = format_final_recipe(reply, goal_name)
 
         # сохраняем для кнопки «Сгенерировать другой»
         context.user_data[GOAL_CODE] = goal_code
@@ -395,36 +381,13 @@ async def goal_recipe_choice_with_time(goal_code: str, time_code: str, query: Ca
             "ingredients": items,
             "title": items[0] if items else "Рецепт"
         }
-        """Создает share-ссылку для рецепта"""
-        last_recipe = context.user_data.get(LAST_GENERATED_RECIPE)
-
-        if not last_recipe:
-            return await query.message.edit_text(
-                "Нет рецепта для отправки.",
-                reply_markup=after_recipe_menu(share_url=None)
-            )
-
-        # Обрезаем текст рецепта для ссылки (Telegram имеет ограничения)
-        recipe_preview = last_recipe['text'][:2000] + "..." if len(last_recipe['text']) > 2000 else last_recipe[
-            'text']
-
-        # Создаем текст для шаринга
-        share_text = f"🍳 {last_recipe['title']}\n\n{recipe_preview}\n\n✨ Рецепт от @Cook_Br1o_bot"
-
-        # Кодируем текст для URL
-        import urllib.parse
-        encoded_text = urllib.parse.quote(share_text)
-        print(encoded_text)
-        # Создаем Telegram share ссылку
-        share_url = f"https://t.me/share/url?url=https://t.me/Cook_Br1o_bot&text={encoded_text}"
 
         # заменяем баннер на готовый рецепт
         await query.message.edit_text(
             pretty,
-            reply_markup=after_recipe_menu(share_url=share_url),
-            link_preview_options=DEFAULT_TRUE,
+            reply_markup=after_recipe_menu(),
             parse_mode=ParseMode.HTML,
-            disable_web_page_preview=False
+            disable_web_page_preview=True
         )
 
     except Exception as e:
@@ -436,32 +399,42 @@ async def goal_recipe_choice_with_time(goal_code: str, time_code: str, query: Ca
     return None
 
 async def handle_goal_selection(goal_code: str, query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает выбор цели и показывает выбор времени"""
-    goal_name = GOALS.get(goal_code, "Обычный домашний рецепт")
-    context.user_data[GOAL_CODE] = goal_code  # Сохраняем выбранную цель
+    """Обрабатывает выбор цели и показывает меню времени"""
+    # 1) Сохраняем выбранную цель в user_data
+    context.user_data[GOAL_CODE] = goal_code
 
+    # 2) Человекочитаемое имя цели
+    goal_name = GOALS.get(goal_code, "Обычные")
+
+    # 3) Забираем продукты из сессии (их туда положил ваш пречек после ввода/фото)
     items = context.user_data.get(SESSION_ITEMS, [])
+    if not items:
+        # если вдруг пусто — подскажем пользователю
+        return await query.message.edit_text(
+            "Не вижу ваших продуктов. Введите список или отправьте фото.",
+        )
+
+    # 4) Красивый список (первые 5 пунктов + счётчик)
     items_text = "\n".join([f"• {smart_capitalize(item)}" for item in items[:5]])
     if len(items) > 5:
-        items_text += f"\n• ... и ещё {len(items) - 5} продуктов"
+        items_text += f"\n• ... и ещё {len(items) - 5} продукт(а/ов)"
 
-    # ДОБАВЛЯЕМ ЭМОДЗИ ДЛЯ КАЖДОЙ ЦЕЛИ
+    # 5) Эмодзи под цель (для UI)
     goal_emojis = {
-        "goal_lose": "💪",  # Похудеть
-        "goal_pp": "🥑",  # ПП
-        "goal_fast": "⚡️",  # Быстро
-        "goal_normal": "🍲",  # Обычные
-        "goal_vegan": "🥦",  # Веган
-        "goal_keto": "🥚"  # Кето-питание
+        "goal_lose": "💪",
+        "goal_pp": "🥑",
+        "goal_fast": "⚡️",
+        "goal_normal": "🍲",
+        "goal_vegan": "🥦",
+        "goal_keto": "🥚",
     }
-
     goal_emoji = goal_emojis.get(goal_code, "🎯")
 
-    # ⬇️⬇️⬇️ ВОТ ЗДЕСЬ ИСПРАВЛЕНИЕ - ДОБАВЛЯЕМ {goal_name} ⬇️⬇️⬇️
+    # 6) Переходим к выбору времени
     await query.message.edit_text(
         f"🍳 <b>Ваши продукты</b> ({len(items)} шт.):\n\n"
         f"{items_text}\n\n"
-        f"{goal_emoji} <b>Цель питания:</b> {goal_name}\n\n"  # ← ТЕПЕРЬ ЗДЕСЬ БУДЕТ "Похудеть", "ПП" и т.д.
+        f"{goal_emoji} <b>Цель питания:</b> {goal_name}\n\n"
         f"⏰ <b>Выберите время готовки:</b>",
         reply_markup=time_selection_menu(),
         parse_mode=ParseMode.HTML
@@ -493,101 +466,114 @@ async def back_to_goal_selection(query: CallbackQuery, context: ContextTypes.DEF
         parse_mode=ParseMode.HTML
     )
 
-async def my_recipes(query: CallbackQuery | None):
-    """Показывает сохраненные рецепты пользователя"""
-    recipes = storage.list_saved_recipes(query.from_user.id)
+# --- ПРОФИЛЬ: Мои рецепты ---
+async def profile_my_recipes(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+
+    user_id = query.from_user.id
+    try:
+        recipes = storage.list_saved_recipes(user_id) 
+    except Exception:
+        recipes = []
 
     if not recipes:
+        txt = (
+            "📖 <b>Мои рецепты</b>\n\n"
+            "Пока пусто. Сохраняйте понравившиеся рецепты кнопкой «❤️ В избранное»."
+        )
         return await query.message.edit_text(
-            "📚 <b>Мои рецепты</b>\n\n"
-            "У вас пока нет сохраненных рецептов.\n"
-            "Сохраняйте понравившиеся рецепты после генерации!",
-            reply_markup=after_recipe_menu(share_url=None),
-            parse_mode='HTML'
+            txt, parse_mode=ParseMode.HTML, reply_markup=subscription_menu_pro()
         )
 
-    # Показываем первый рецепт из списка с навигацией
-    recipe = recipes[0]
-    text = f"📚 <b>Мои рецепты</b> ({len(recipes)} шт.)\n\n"
-    text += f"<b>{recipe['title']}</b>\n\n"
-    text += recipe['text'][:1000] + "..." if len(recipe['text']) > 1000 else recipe['text']
+    lines = []
+    for i, r in enumerate(recipes[:5], start=1):
+        title = r.get("title") or f"Рецепт #{i}"
+        lines.append(f"{i}. {title}")
 
+    txt = "📖 <b>Мои рецепты</b>\n\n" + "\n".join(lines)
     await query.message.edit_text(
-        text,
-        reply_markup=after_recipe_menu(share_url=None),
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True
+        txt, parse_mode=ParseMode.HTML, reply_markup=subscription_menu_pro()
     )
 
-async def share_recipe(query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
-    """Функция для шаринга рецепта"""
-    last_recipe = context.user_data.get(LAST_GENERATED_RECIPE)
+# --- ПРОФИЛЬ: Подписка ---
+async def profile_subscribe(query: CallbackQuery):
 
-    if not last_recipe:
-        return await query.message.reply_text(
-            "Нет рецепта для поделиться. Сначала получите рецепт.",
-            reply_markup=main_menu()
+    user_id = query.from_user.id
+    try:
+        is_pro = storage.user_is_pro(user_id)
+    except Exception:
+        is_pro = False
+
+    if is_pro:
+        txt = (
+            "🧾 <b>Моя подписка</b>\n\n"
+            "Статус: Активна ✅\n"
+            "Активна до: <b>дд.мм.гггг</b>\n"
+            
+            
+            "Преимущества PRO: больше токенов, приоритет, премиум-рецепты."
         )
-
-    # Создаем клавиатуру для шаринга как на скриншоте "поделится 1.jpg"
-    share_keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📤 Отправить другу", callback_data="send_to_friend")],
-        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_recipe")]
-    ])
-
-    await query.message.edit_text(
-        "📤 <b>Поделись этим рецептом:</b>",
-        reply_markup=share_keyboard,
-        parse_mode='HTML'
-    )
-
-async def change_products(query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
-    """Возврат к изменению списка продуктов"""
-    context.user_data[SESSION_ITEMS] = []
-    context.user_data[APPEND_MODE] = False
-    context.user_data[AWAIT_MANUAL] = True
-
-    await query.message.edit_text(
-        "🔄 <b>Изменить продукты</b>\n\n"
-        "Введите новый список продуктов через запятую:\n\n"
-        "Пример: курица, рис, лук, морковь",
-        reply_markup=photoback_submenu(),
-        parse_mode='HTML'
-    )
-
-
-async def send_to_friend(query: CallbackQuery | None, context: ContextTypes.DEFAULT_TYPE):
-    """Создает share-ссылку для рецепта"""
-    last_recipe = context.user_data.get(LAST_GENERATED_RECIPE)
-
-    if not last_recipe:
-        return await query.message.edit_text(
-            "Нет рецепта для отправки.",
-            reply_markup=after_recipe_menu(share_url=None)
+        kb = subscription_menu_pro()   # только «Назад»
+    else:
+        txt = (
+            "🧾 <b>Моя подписка</b>\n\n"
+            "Статус: <b>Lite</b>\n"
+            "Ограничения: 2 рецепта в день.\n\n"
+            "Повысьте до PRO, чтобы получить больше лимитов и функций."
         )
+        kb = subscription_menu_lite()  # «Улучшить до PRO» + «Назад»
 
-    # Обрезаем текст рецепта для ссылки (Telegram имеет ограничения)
-    recipe_preview = last_recipe['text'][:200] + "..." if len(last_recipe['text']) > 200 else last_recipe['text']
+    await query.message.edit_text(txt, parse_mode=ParseMode.HTML, reply_markup=kb)
 
-    # Создаем текст для шаринга
-    share_text = f"🍳 {last_recipe['title']}\n\n{recipe_preview}\n\n✨ Рецепт от @Cook_Br1o_bot"
+async def back_to_profile(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    user_id = query.from_user.id
+    text, markup, pm = await build_profile_view(context, user_id)
+    await query.message.edit_text(text, reply_markup=markup, parse_mode=pm)
 
-    # Кодируем текст для URL
-    import urllib.parse
-    encoded_text = urllib.parse.quote(share_text)
-
-    # Создаем Telegram share ссылку
-    share_url = f"https://t.me/share/url?url=https://t.me/Cook_Br1o_bot&text={encoded_text}"
-
-    # Создаем кнопку для шаринга
-    share_keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📤 Поделиться рецептом", url=share_url)],
-        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_share")]
-    ])
-
-    await query.message.edit_text(
-        "📤 <b>Поделиться рецептом</b>\n\n"
-        "Нажмите кнопку ниже, чтобы поделиться этим рецептом с друзьями в Telegram:",
-        reply_markup=share_keyboard,
-        parse_mode='HTML'
+# Нажатие «Улучшить до PRO»
+async def subscribe_upgrade(query: CallbackQuery):
+    from telegram.constants import ParseMode
+    from keyboards import subscription_menu_lite
+    txt = (
+        "💳 <b>Улучшение до PRO</b>\n\n"
+        "Для оформления PRO свяжитесь с администратором: @admin\n"
+        "Скоро добавим оплату прямо в боте."
     )
+    await query.message.edit_text(txt, parse_mode=ParseMode.HTML, reply_markup=subscription_menu_lite())
+
+async def build_profile_view(context, user_id: int):
+    # 1) Статус
+    try:
+        is_pro = storage.user_is_pro(user_id)
+    except Exception:
+        is_pro = False
+    status = "PRO" if is_pro else "Lite"
+
+    # 2) Счётчики
+    try:
+        recipes_total = storage.count_recipes(user_id)
+    except Exception:
+        recipes_total = 0
+    try:
+        favorites_total = storage.count_favorites(user_id)
+    except Exception:
+        favorites_total = 0
+
+    # 3) Последние продукты (сначала из сессии, если есть)
+    items = context.user_data.get("SESSION_ITEMS") or []
+    if not items:
+        try:
+            rows = storage.list_ingredients(user_id) or []
+            items = [name for _, name, _ in rows[:5]]
+        except Exception:
+            items = []
+    last_items_txt = "\n".join(f"• {x}" for x in items[:5]) if items else "—"
+
+    # 4) Текст + клавиатура
+    text = (
+        "👤 <b>Мой профиль</b>\n\n"
+        f"Статус: <b>{status}</b>\n"
+        f"Сгенерировано рецептов: <b>{recipes_total}</b>\n"
+        f"В избранном: <b>{favorites_total}</b>\n\n"
+        f"<b>Последние продукты:</b>\n{last_items_txt}"
+    )
+    return text, profile_menu(), ParseMode.HTML

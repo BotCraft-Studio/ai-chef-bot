@@ -17,19 +17,22 @@ from handlers.query_handler import (
     my_ingredients,
     regenerate_recipe,
     save_recipe,
-    upload_photo, back_to_goal_selection, handle_time_selection, handle_goal_selection,
-    my_recipes,
-    share_recipe,
-    send_to_friend,
-    change_products
+    upload_photo, 
+    back_to_goal_selection, 
+    handle_time_selection, 
+    handle_goal_selection,
+    profile_my_recipes,
+    profile_subscribe,
+    back_to_profile,
+    subscribe_upgrade,
 )
+
 from handlers.query_handler import goal_recipe_choice_with_time
-from src.keyboards import goal_choice_menu, time_selection_menu, after_recipe_menu, main_menu
+from src.keyboards import goal_choice_menu, time_selection_menu
 from utils import query_utils
-from utils.bot_utils import BUSY, AWAIT_MANUAL, SESSION_ITEMS, APPEND_MODE, TIME_OPTIONS, SELECTED_TIME, GOAL_CODE, \
-    LAST_GENERATED_RECIPE
+from utils.bot_utils import BUSY, AWAIT_MANUAL, SESSION_ITEMS, APPEND_MODE, TIME_OPTIONS, SELECTED_TIME, GOAL_CODE
 from utils.goal_utils import GOALS
-from utils.query_utils import MANUAL_INPUT, smart_capitalize, MY_RECIPES, SHARE_RECIPE, CHANGE_PRODUCTS
+from utils.query_utils import MANUAL_INPUT, smart_capitalize
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -102,12 +105,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await my_ingredients(query)
         case query_utils.MAIN_MENU:
             await back_to_main_menu(query)
+
+        # Вроде как не используется, не нашел в боте
         case query_utils.BUY_PRO:
             await buy_pro(query)
-        case query_utils.CHANGE_GOAL:
-            await change_goal(query)
-        case query_utils.CLEAR_INGREDIENTS:
-            await clear_ingredients(user_id, query)
+
         case query_utils.DAILY_RECIPE:
             await daily_recipe(query)
         case query_utils.GOAL_RECIPE:
@@ -121,40 +123,16 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         case query_utils.UPLOAD_PHOTO:
             await upload_photo(query)
         case query_utils.BACK_TO_GOAL_SELECTION:
+            # Возврат к выбору цели
             await back_to_goal_selection(query, context)
         case query_utils.MY_RECIPES:
-            await my_recipes(query)
-        case query_utils.SHARE_RECIPE:
-            await share_recipe(query, context)
-        case query_utils.CHANGE_PRODUCTS:
-            await change_products(query, context)
-        case "send_to_friend":
-            await send_to_friend(query, context)
-        case "back_to_share":
-            await share_recipe(query, context)
-        case "back_to_recipe":
-            # Возврат к последнему рецепту
-            last_recipe = context.user_data.get(LAST_GENERATED_RECIPE)
-            if last_recipe:
-                # Создаем ссылку для шаринга как при генерации рецепта
-                recipe_preview = last_recipe['text'][:2000] + "..." if len(last_recipe['text']) > 2000 else last_recipe[
-                    'text']
-                share_text = f"🍳 {last_recipe['title']}\n\n{recipe_preview}\n\n✨ Рецепт от @Cook_Br1o_bot"
-                import urllib.parse
-                encoded_text = urllib.parse.quote(share_text)
-                share_url = f"https://t.me/share/url?url=https://t.me/Cook_Br1o_bot&text={encoded_text}"
-
-                await query.message.edit_text(
-                    last_recipe['text'],
-                    reply_markup=after_recipe_menu(share_url=share_url),  # ← передаем share_url
-                    parse_mode=ParseMode.HTML,
-                    disable_web_page_preview=True
-                )
-            else:
-                await query.message.edit_text(
-                    "Рецепт не найден.",
-                    reply_markup=main_menu()
-                )
+            await profile_my_recipes(query, context)
+        case query_utils.MY_SUBSCRIBE:
+            await profile_subscribe(query)
+        case query_utils.BACK_TO_PROFILE:
+            await back_to_profile(query, context)
+        case query_utils.BUY_PRO:
+            await subscribe_upgrade(query)
         case user_input if user_input in TIME_OPTIONS:
             # Обработка выбора времени
             await handle_time_selection(user_input, query, context)
@@ -163,7 +141,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user_input in GOALS:
                 # ТЕПЕРЬ ПОСЛЕ ВЫБОРА ЦЕЛИ ПОКАЗЫВАЕМ ВЫБОР ВРЕМЕНИ
                 await handle_goal_selection(user_input, query, context)
-
 
 
 def normalize_items(raw_items):
