@@ -25,7 +25,7 @@ MY_RECIPES = "my_recipes"               # Мои сохраненные реце
 SHARE_RECIPE = "share_recipe"           # Поделиться рецептом
 CHANGE_PRODUCTS = "change_products"     # Изменить продукты
 
-# Красивое приведение к Заглавной Каждого Слова
+# Хэлпер smart_capitalize (для красивого списка)
 def smart_capitalize(s: str) -> str:
-    # корректно работает для «красный лук», «миндальное молоко» и т.п.
-    return " ".join(w[:1].upper() + w[1:] for w in s.split())
+    s = s.strip()
+    return s[:1].upper() + s[1:] if s else s

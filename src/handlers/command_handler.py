@@ -2,16 +2,21 @@
 Модуль отвечает за обработку команд, поступающих от пользователя
 """
 
+import logging
+
 from telegram import Update
 from telegram.ext import ContextTypes
 
 import storage
 from keyboards import premium_menu, profile_menu, main_menu
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
 
 async def start_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     text = """
-🍳 Добро пожаловать в AI-Chef! 👨‍🍳
+Добро пожаловать в AI-Chef! 👨‍🍳
 
 Я ваш персональный шеф-повар с искусственным интеллектом! 
 
@@ -24,6 +29,7 @@ async def start_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
 
 👇 Выберите действие:
     """
+
     await update.message.reply_text(text, reply_markup=main_menu())
 
 
@@ -57,14 +63,13 @@ async def help_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
 async def list_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     rows = storage.list_ingredients(update.effective_user.id)
     if not rows:
-        return await update.message.reply_text(
+        await update.message.reply_text(
             "📦 Ингредиентов нет.\n\n"
             "✨ Добавьте продукты через меню!"
         )
-    text = "Ваши ингредиенты:\n" + "\n".join(f"{i}. {n}" for i, n, _ in rows[:20])
-    await update.message.reply_text(text)
-
-    return None
+    else:
+        text = "Ваши ингредиенты:\n" + "\n".join(f"{i}. {n}" for i, n, _ in rows[:20])
+        await update.message.reply_text(text)
 
 
 async def del_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
@@ -121,6 +126,7 @@ async def profile_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
         reply_markup=profile_menu(),
         parse_mode='HTML'
     )
+
 
 async def privacy_cmd(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     privacy_text = """
